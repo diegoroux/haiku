@@ -219,7 +219,11 @@ virtio_snd_init_device(void* _info, void** cookie)
 		goto err2;
 	}
 
-	// TODO: Query about chmaps info.
+	status = VirtIOSoundQueryChmapsInfo(info);
+	if (status != B_OK) {
+		ERROR("stream info query failed (%s)\n", strerror(status));
+		goto err2;
+	}
 
 	*cookie = info;
 	return B_OK;

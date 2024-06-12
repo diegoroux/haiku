@@ -12,13 +12,19 @@
 #include <virtio.h>
 
 #define ERROR(x...)		dprintf("\33[33mvirtio_sound:\33[0m " x)
+#define LOG(x...)		dprintf("virtio_sound: " x)
+
+#ifdef _VIRTIO_SND_DEBUG
+#define DEBUG(x...)		dprintf("\33[36mvirtio_sound:\33[0m " x)
+#endif
+
 
 struct VirtIOSoundPCMInfo {
 	uint32						stream_id;
 
 	uint32						features;
-	uint64						formats;
-	uint64						rates;
+	uint32						formats;
+	uint32						rates;
 
 	uint32						best_format;
 	uint32						best_rate;
@@ -61,5 +67,8 @@ VirtIOSoundQueryInfo(VirtIOSoundDriverInfo* info, uint32 type,
 
 status_t
 VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info);
+
+status_t
+VirtIOSoundQueryChmapsInfo(VirtIOSoundDriverInfo* info);
 
 #endif

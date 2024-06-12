@@ -30,8 +30,8 @@ multi_get_description(VirtIOSoundDriverInfo* info, multi_description* desc)
 	if (info->outputStream != NULL) {
 		desc->output_channel_count = info->outputStream->channels_min;
 
-		desc->output_rates = info->outputStream->best_rate;
-		desc->output_formats = info->outputStream->best_format;
+		desc->output_rates = info->outputStream->rates;
+		desc->output_formats = info->outputStream->formats;
 
 		desc->interface_flags |= B_MULTI_INTERFACE_PLAYBACK;
 	}
@@ -39,8 +39,8 @@ multi_get_description(VirtIOSoundDriverInfo* info, multi_description* desc)
 	if (info->inputStream != NULL) {
 		desc->input_channel_count = info->inputStream->channels_min;
 
-		desc->input_rates = info->inputStream->best_rate;
-		desc->input_formats = info->inputStream->best_format;
+		desc->input_rates = info->inputStream->rates;
+		desc->input_formats = info->inputStream->formats;
 
 		desc->interface_flags |= B_MULTI_INTERFACE_RECORD;
 	}

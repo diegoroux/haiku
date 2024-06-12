@@ -6,6 +6,7 @@ UsePrivateHeaders drivers audio virtio ;
 KernelAddon virtio_sound :
 	driver.cpp
 	multi_audio.cpp
+	snd_chmaps.cpp
 	snd_pcm.cpp
 	virtio.cpp
 ;

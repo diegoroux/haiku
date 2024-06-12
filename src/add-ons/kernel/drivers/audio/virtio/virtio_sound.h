@@ -116,7 +116,7 @@ enum {
     VIRTIO_SND_PCM_FMT_MU_LAW,          /*  8 /  8 bits */ 
     VIRTIO_SND_PCM_FMT_A_LAW,           /*  8 /  8 bits */ 
     VIRTIO_SND_PCM_FMT_S8,              /*  8 /  8 bits */ 
-    VIRTIO_SND_PCM_FMT_uint8_t,              /*  8 /  8 bits */ 
+    VIRTIO_SND_PCM_FMT_U8,              /*  8 /  8 bits */ 
     VIRTIO_SND_PCM_FMT_S16,             /* 16 / 16 bits */ 
     VIRTIO_SND_PCM_FMT_U16,             /* 16 / 16 bits */ 
     VIRTIO_SND_PCM_FMT_S18_3,           /* 18 / 24 bits */ 
@@ -134,7 +134,7 @@ enum {
     VIRTIO_SND_PCM_FMT_FLOAT,           /* 32 / 32 bits */ 
     VIRTIO_SND_PCM_FMT_FLOAT64,         /* 64 / 64 bits */ 
     /* digital formats (width / physical width) */ 
-    VIRTIO_SND_PCM_FMT_DSD_uint8_t,          /*  8 /  8 bits */ 
+    VIRTIO_SND_PCM_FMT_DSD_U8,          /*  8 /  8 bits */ 
     VIRTIO_SND_PCM_FMT_DSD_U16,         /* 16 / 16 bits */ 
     VIRTIO_SND_PCM_FMT_DSD_U32,         /* 32 / 32 bits */ 
     VIRTIO_SND_PCM_FMT_IEC958_SUBFRAME  /* 32 / 32 bits */ 
@@ -168,6 +168,80 @@ struct virtio_snd_pcm_info {
     uint8_t channels_max; 
  
     uint8_t padding[5]; 
+};
+
+struct virtio_snd_pcm_set_params { 
+    struct virtio_snd_pcm_hdr hdr; /* .code = VIRTIO_SND_R_PCM_SET_PARAMS */ 
+    uint32 buffer_bytes; 
+    uint32 period_bytes; 
+    uint32 features; /* 1 << VIRTIO_SND_PCM_F_XXX */ 
+    uint8 channels; 
+    uint8 format; 
+    uint8 rate; 
+ 
+    uint8 padding; 
+};
+
+/* an I/O header */ 
+struct virtio_snd_pcm_xfer { 
+    uint32 stream_id; 
+}; 
+ 
+/* an I/O status */ 
+struct virtio_snd_pcm_status { 
+    uint32 status; 
+    uint32 latency_bytes; 
+};
+
+/* standard channel position definition */ 
+enum { 
+    VIRTIO_SND_CHMAP_NONE = 0,  /* undefined */ 
+    VIRTIO_SND_CHMAP_NA,        /* silent */ 
+    VIRTIO_SND_CHMAP_MONO,      /* mono stream */ 
+    VIRTIO_SND_CHMAP_FL,        /* front left */ 
+    VIRTIO_SND_CHMAP_FR,        /* front right */ 
+    VIRTIO_SND_CHMAP_RL,        /* rear left */ 
+    VIRTIO_SND_CHMAP_RR,        /* rear right */ 
+    VIRTIO_SND_CHMAP_FC,        /* front center */ 
+    VIRTIO_SND_CHMAP_LFE,       /* low frequency (LFE) */ 
+    VIRTIO_SND_CHMAP_SL,        /* side left */ 
+    VIRTIO_SND_CHMAP_SR,        /* side right */ 
+    VIRTIO_SND_CHMAP_RC,        /* rear center */ 
+    VIRTIO_SND_CHMAP_FLC,       /* front left center */ 
+    VIRTIO_SND_CHMAP_FRC,       /* front right center */ 
+    VIRTIO_SND_CHMAP_RLC,       /* rear left center */ 
+    VIRTIO_SND_CHMAP_RRC,       /* rear right center */ 
+    VIRTIO_SND_CHMAP_FLW,       /* front left wide */ 
+    VIRTIO_SND_CHMAP_FRW,       /* front right wide */ 
+    VIRTIO_SND_CHMAP_FLH,       /* front left high */ 
+    VIRTIO_SND_CHMAP_FCH,       /* front center high */ 
+    VIRTIO_SND_CHMAP_FRH,       /* front right high */ 
+    VIRTIO_SND_CHMAP_TC,        /* top center */ 
+    VIRTIO_SND_CHMAP_TFL,       /* top front left */ 
+    VIRTIO_SND_CHMAP_TFR,       /* top front right */ 
+    VIRTIO_SND_CHMAP_TFC,       /* top front center */ 
+    VIRTIO_SND_CHMAP_TRL,       /* top rear left */ 
+    VIRTIO_SND_CHMAP_TRR,       /* top rear right */ 
+    VIRTIO_SND_CHMAP_TRC,       /* top rear center */ 
+    VIRTIO_SND_CHMAP_TFLC,      /* top front left center */ 
+    VIRTIO_SND_CHMAP_TFRC,      /* top front right center */ 
+    VIRTIO_SND_CHMAP_TSL,       /* top side left */ 
+    VIRTIO_SND_CHMAP_TSR,       /* top side right */ 
+    VIRTIO_SND_CHMAP_LLFE,      /* left LFE */ 
+    VIRTIO_SND_CHMAP_RLFE,      /* right LFE */ 
+    VIRTIO_SND_CHMAP_BC,        /* bottom center */ 
+    VIRTIO_SND_CHMAP_BLC,       /* bottom left center */ 
+    VIRTIO_SND_CHMAP_BRC        /* bottom right center */ 
+}; 
+ 
+/* maximum possible number of channels */ 
+#define VIRTIO_SND_CHMAP_MAX_SIZE 18
+ 
+struct virtio_snd_chmap_info { 
+    struct virtio_snd_info hdr; 
+    uint8 direction; 
+    uint8 channels; 
+    uint8 positions[VIRTIO_SND_CHMAP_MAX_SIZE]; 
 };
 
 #endif

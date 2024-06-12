@@ -14,8 +14,10 @@
 #include "driver.h"
 #include "virtio_sound.h"
 
+
 #define	B_SR_NA		0x00
 #define B_FMT_NA	0x00
+
 
 static const uint32 supportedRates[] = {
 	B_SR_NA,		// VIRTIO_SND_PCM_RATE_5512
@@ -63,6 +65,7 @@ static const uint32 supportedFormats[] = {
 	B_FMT_NA,		// VIRTIO_SND_PCM_FMT_IEC958_SUBFRAME
 };
 
+
 static uint32
 get_best_rate(struct virtio_snd_pcm_info info)
 {
@@ -103,8 +106,8 @@ rates_to_multiaudio(struct virtio_snd_pcm_info info)
 static uint32
 get_best_fmt(struct virtio_snd_pcm_info info)
 {
-	uint64 fmt = (1 << VIRTIO_SND_PCM_FMT_S32);
-	uint8 i = VIRTIO_SND_PCM_FMT_S32;
+	uint64 fmt = (1 << VIRTIO_SND_PCM_FMT_FLOAT64);
+	uint8 i = VIRTIO_SND_PCM_FMT_FLOAT64;
 
 	while (fmt != 0) {
 		if (info.formats & fmt)
@@ -116,6 +119,26 @@ get_best_fmt(struct virtio_snd_pcm_info info)
 
 	return B_FMT_NA;
 }
+
+
+static uint32
+fmts_to_multiaudio(struct virtio_snd_pcm_info info)
+{
+	uint64 format = (1 << VIRTIO_SND_PCM_FMT_FLOAT64);
+	uint8 i = VIRTIO_SND_PCM_FMT_FLOAT64;
+
+    uint64 fmts = B_FMT_NA;
+	while (format != 0) {
+		if (info.formats & format)
+			fmts |= supportedFormats[i];
+
+		format = format >> 1;
+		i--;
+	}
+
+	return fmts;
+}
+
 
 status_t
 VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info)
@@ -134,8 +157,8 @@ VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info)
 		stream.stream_id = id;
 
 		stream.features = stream_info[id].features;
-		stream.formats = stream_info[id].formats;
-		stream.rates = rates_to_multiaudio(stream_info[id].rates);
+		stream.formats = fmts_to_multiaudio(stream_info[id]);
+		stream.rates = rates_to_multiaudio(stream_info[id]);
 
 		stream.best_format = get_best_fmt(stream_info[id]);
 		stream.best_rate = get_best_rate(stream_info[id]);
@@ -173,6 +196,16 @@ VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info)
 		ERROR("unsupported PCM streams\n");
 		return B_ERROR;
 	}
+
+	if (info->inputStream != NULL)
+		LOG("input: selected stream_%u: formats %u, rates: %u\n",
+			info->inputStream->stream_id, info->inputStream->formats,
+			info->inputStream->rates);
+
+	if (info->outputStream != NULL)
+		LOG("output: selected stream_%u: formats %u, rates: %u\n",
+			info->outputStream->stream_id, info->outputStream->formats,
+			info->outputStream->rates);
 
 	return B_OK;
 
