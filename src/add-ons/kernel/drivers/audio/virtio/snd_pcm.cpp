@@ -67,24 +67,6 @@ static const uint32 supportedFormats[] = {
 
 
 static uint32
-get_best_rate(struct virtio_snd_pcm_info info)
-{
-	uint64 rate = (1 << VIRTIO_SND_PCM_RATE_384000);
-	uint8 i = VIRTIO_SND_PCM_RATE_384000;
-
-	while (rate != 0) {
-		if (info.rates & rate)
-			return supportedRates[i];
-
-		rate = rate >> 1;
-		i--;
-	}
-
-	return B_SR_NA;
-}
-
-
-static uint32
 rates_to_multiaudio(struct virtio_snd_pcm_info info)
 {
 	uint64 rate = (1 << VIRTIO_SND_PCM_RATE_384000);
@@ -100,24 +82,6 @@ rates_to_multiaudio(struct virtio_snd_pcm_info info)
 	}
 
 	return rates;
-}
-
-
-static uint32
-get_best_fmt(struct virtio_snd_pcm_info info)
-{
-	uint64 fmt = (1 << VIRTIO_SND_PCM_FMT_FLOAT64);
-	uint8 i = VIRTIO_SND_PCM_FMT_FLOAT64;
-
-	while (fmt != 0) {
-		if (info.formats & fmt)
-			return supportedFormats[i];
-
-		fmt = fmt >> 1;
-		i--;
-	}
-
-	return B_FMT_NA;
 }
 
 
@@ -151,67 +115,64 @@ VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info)
 	if (status != B_OK)
 		return status;
 
-	VirtIOSoundPCMInfo stream;
+	info->streams = (VirtIOSoundPCMInfo*)malloc(sizeof(VirtIOSoundPCMInfo) * info->nStreams);
+	if (info->streams == NULL)
+		return B_NO_MEMORY;
 
-	for (uint32 id = 0; id < info->nStreams; id++) {
-		stream.stream_id = id;
+	for (uint32 i = 0; i < info->nStreams; i++) {
+		VirtIOSoundPCMInfo* stream = &info->streams[i];
 
-		stream.features = stream_info[id].features;
-		stream.formats = fmts_to_multiaudio(stream_info[id]);
-		stream.rates = rates_to_multiaudio(stream_info[id]);
+		stream->stream_id = i;
+		stream->nid = stream_info[i].hdr.hda_fn_nid;
 
-		stream.best_format = get_best_fmt(stream_info[id]);
-		stream.best_rate = get_best_rate(stream_info[id]);
+		stream->features = stream_info[i].features;
 
-		stream.channels_min = stream_info[id].channels_min;
-		stream.channels_max = stream_info[id].channels_max;
+		stream->formats = fmts_to_multiaudio(stream_info[i]);
+		if (!stream->formats) {
+			ERROR("stream_%u: unsupported PCM formats (%u)\n", i, stream->formats);
 
-		if ((stream.best_format == B_FMT_NA) || (stream.best_rate == B_SR_NA))
-			continue;
+			status = B_ERROR;
+			goto err1;
+		}
 
-		switch (stream_info[id].direction) {
+		stream->rates = rates_to_multiaudio(stream_info[i]);
+		if (!stream->rates) {
+			ERROR("stream_%u: unsupported PCM rates (%u)\n", i, stream->formats);
+
+			status = B_ERROR;
+			goto err1;
+		}
+
+		switch (stream_info[i].direction) {
+			case VIRTIO_SND_D_OUTPUT:
+				info->inputStreams++;
+				break;
 			case VIRTIO_SND_D_INPUT:
+				info->outputStreams++;
 				break;
-			case VIRTIO_SND_D_OUTPUT: {
-				if (info->outputStream == NULL) {
-					info->outputStream = (VirtIOSoundPCMInfo*)malloc(sizeof(VirtIOSoundPCMInfo));
-					*info->outputStream = stream;
-
-					break;
-				}
-
-				if (stream.best_rate > info->outputStream->best_rate)
-					*info->outputStream = stream;
-
-				break;
-			}
 			default:
-				ERROR("unknown direction (%u)\n", stream_info[id].direction);
+				ERROR("unknown stream direction (%u)\n", stream_info[i].direction);
 				status = B_ERROR;
 				goto err1;
 		}
+
+		stream->direction = stream_info[i].direction;
+
+		if (stream_info[i].channels_min > stream_info[i].channels_max) {
+			ERROR("invalid channel range (%u-%u)\n", stream_info[i].channels_min,
+				stream_info[i].channels_max);
+
+			status = B_ERROR;
+			goto err1;
+		}
+
+		stream->channels_min = stream_info[i].channels_min;
+		stream->channels_max = stream_info[i].channels_max;
 	}
-
-	if ((info->inputStream == NULL) && (info->outputStream == NULL)) {
-		ERROR("unsupported PCM streams\n");
-		return B_ERROR;
-	}
-
-	if (info->inputStream != NULL)
-		LOG("input: selected stream_%u: formats %u, rates: %u\n",
-			info->inputStream->stream_id, info->inputStream->formats,
-			info->inputStream->rates);
-
-	if (info->outputStream != NULL)
-		LOG("output: selected stream_%u: formats %u, rates: %u\n",
-			info->outputStream->stream_id, info->outputStream->formats,
-			info->outputStream->rates);
 
 	return B_OK;
 
 err1:
-	if (info->inputStream != NULL) free(info->inputStream);
-	if (info->outputStream != NULL) free(info->outputStream);
-
+	free(info->streams);
 	return status;
 }

@@ -55,7 +55,7 @@ VirtIOSoundQueryInfo(VirtIOSoundDriverInfo* info, uint32 type,
 	memcpy(response,
 		(void*)(info->ctrlBuf + sizeof(struct virtio_snd_query_info) +
             sizeof(struct virtio_snd_hdr)),
-		count * size);
+		responseSize);
 
 	return B_OK;
 }

@@ -5,6 +5,7 @@
 #ifndef _VIRTIO_SND_H
 #define _VIRTIO_SND_H
 
+
 struct virtio_snd_config { 
 	uint32_t jacks; 
 	uint32_t streams; 

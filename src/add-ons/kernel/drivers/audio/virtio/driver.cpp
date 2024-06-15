@@ -51,7 +51,7 @@ virtio_snd_supports_device(device_node* parent)
 	if (deviceType != VIRTIO_DEVICE_ID_SOUND)
 		return 0.0f;
 
-	dprintf("virtio_sound: Virtio sound device found!\n");
+	LOG("VirtIO Sound Device found!\n");
 
 	return 0.6f;
 }
@@ -61,7 +61,7 @@ static status_t
 virtio_snd_register_dev(device_node* node)
 {
 	device_attr attrs[] = {
-		{B_DEVICE_PRETTY_NAME, B_STRING_TYPE, {.string = "Virtio Sound"}},
+		{B_DEVICE_PRETTY_NAME, B_STRING_TYPE, {.string = "VirtIO Sound Device"}},
 		{}
 	};
 
@@ -219,10 +219,12 @@ virtio_snd_init_device(void* _info, void** cookie)
 		goto err2;
 	}
 
-	status = VirtIOSoundQueryChmapsInfo(info);
-	if (status != B_OK) {
-		ERROR("stream info query failed (%s)\n", strerror(status));
-		goto err2;
+	if (info->nChmaps > 0) {
+		status = VirtIOSoundQueryChmapsInfo(info);
+		if (status != B_OK) {
+			ERROR("stream info query failed (%s)\n", strerror(status));
+			goto err2;
+		}
 	}
 
 	*cookie = info;

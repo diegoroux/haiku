@@ -5,6 +5,7 @@
 #ifndef _VIRTIO_SND_DRIVER_H
 #define _VIRTIO_SND_DRIVER_H
 
+
 #include <fs/devfs.h>
 
 #include <stdlib.h>
@@ -22,12 +23,13 @@
 struct VirtIOSoundPCMInfo {
 	uint32						stream_id;
 
+	uint32						nid;
+
 	uint32						features;
 	uint32						formats;
 	uint32						rates;
 
-	uint32						best_format;
-	uint32						best_rate;
+	uint8						direction;
 
 	uint8						channels_min;
 	uint8						channels_max;
@@ -50,8 +52,11 @@ struct VirtIOSoundDriverInfo {
 	uint32						nStreams;
 	uint32						nChmaps;
 
-	VirtIOSoundPCMInfo*			inputStream;
-	VirtIOSoundPCMInfo*			outputStream;
+	VirtIOSoundPCMInfo*			streams;
+	uint32						inputStreams;
+	uint32						outputStreams;
+
+	multi_channel_info*			chmaps;
 
 	area_id						ctrlArea;
 	addr_t						ctrlBuf;

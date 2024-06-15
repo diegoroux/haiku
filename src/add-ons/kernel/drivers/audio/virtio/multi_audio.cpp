@@ -23,24 +23,27 @@ multi_get_description(VirtIOSoundDriverInfo* info, multi_description* desc)
 	desc->input_bus_channel_count = 0;
 	desc->aux_bus_channel_count = 0;
 
-	memset((void*)desc->channels, 0x00, sizeof(multi_channel_info) * desc->request_channel_count);
+	// TODO: Return a real channel map.
+	memset((void*)desc->channels, 0x00,
+		sizeof(multi_channel_info) * desc->request_channel_count);
 
 	desc->interface_flags = 0x00;
 
-	if (info->outputStream != NULL) {
-		desc->output_channel_count = info->outputStream->channels_min;
+	// TODO: manage I/O streams, no hardcoding.
+	if (info->outputStreams) {
+		desc->output_channel_count = info->streams[0].channels_min;
 
-		desc->output_rates = info->outputStream->rates;
-		desc->output_formats = info->outputStream->formats;
+		desc->output_rates = info->streams[0].rates;
+		desc->output_formats = info->streams[0].formats;
 
 		desc->interface_flags |= B_MULTI_INTERFACE_PLAYBACK;
 	}
 
-	if (info->inputStream != NULL) {
-		desc->input_channel_count = info->inputStream->channels_min;
+	if (info->inputStreams) {
+		desc->input_channel_count = info->streams[1].channels_min;
 
-		desc->input_rates = info->inputStream->rates;
-		desc->input_formats = info->inputStream->formats;
+		desc->input_rates = info->streams[1].rates;
+		desc->input_formats = info->streams[1].formats;
 
 		desc->interface_flags |= B_MULTI_INTERFACE_RECORD;
 	}
