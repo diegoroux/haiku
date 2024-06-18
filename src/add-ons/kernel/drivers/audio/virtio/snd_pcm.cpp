@@ -115,7 +115,7 @@ VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info)
 	if (status != B_OK)
 		return status;
 
-	info->streams = (VirtIOSoundPCMInfo*)malloc(sizeof(VirtIOSoundPCMInfo) * info->nStreams);
+	info->streams = (VirtIOSoundPCMInfo*)malloc(info->nStreams * sizeof(VirtIOSoundPCMInfo));
 	if (info->streams == NULL)
 		return B_NO_MEMORY;
 
@@ -168,6 +168,8 @@ VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info)
 
 		stream->channels_min = stream_info[i].channels_min;
 		stream->channels_max = stream_info[i].channels_max;
+
+		stream->chmap = NULL;
 	}
 
 	return B_OK;

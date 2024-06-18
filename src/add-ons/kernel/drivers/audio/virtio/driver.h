@@ -31,8 +31,11 @@ struct VirtIOSoundPCMInfo {
 
 	uint8						direction;
 
+	uint8						channels;
 	uint8						channels_min;
 	uint8						channels_max;
+
+	multi_channel_info*			chmap;
 };
 
 
@@ -55,8 +58,6 @@ struct VirtIOSoundDriverInfo {
 	VirtIOSoundPCMInfo*			streams;
 	uint32						inputStreams;
 	uint32						outputStreams;
-
-	multi_channel_info*			chmaps;
 
 	area_id						ctrlArea;
 	addr_t						ctrlBuf;
