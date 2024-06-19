@@ -272,7 +272,7 @@ virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length)
 		case B_MULTI_GET_DESCRIPTION: return multi_get_description(info, desc);
 	}
 
-	return B_OK;
+	return B_BAD_VALUE;
 }
 
 

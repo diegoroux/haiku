@@ -19,6 +19,7 @@
 #define DEBUG(x...)		dprintf("\33[36mvirtio_sound:\33[0m " x)
 #endif
 
+#define VIRTIO_SND_CHMAP_MAX_SIZE	18
 
 struct VirtIOSoundPCMInfo {
 	uint32						stream_id;
@@ -35,7 +36,7 @@ struct VirtIOSoundPCMInfo {
 	uint8						channels_min;
 	uint8						channels_max;
 
-	multi_channel_info*			chmap;
+	uint8						chmap[VIRTIO_SND_CHMAP_MAX_SIZE];
 };
 
 

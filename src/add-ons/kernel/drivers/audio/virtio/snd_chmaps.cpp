@@ -74,28 +74,16 @@ get_stream_by_nid(VirtIOSoundDriverInfo* info, uint8 direction, uint32 nid)
 
 
 static status_t
-create_multi_channel_info(struct virtio_snd_chmap_info info,
-    multi_channel_info* mInfo)
+chmap_to_multi(struct virtio_snd_chmap_info info, VirtIOSoundPCMInfo* stream)
 {
+
     for (uint32 i = 0; i < info.channels; i++) {
-        multi_channel_info* cInfo = &mInfo[i];
+        stream->chmap[i] = supportedChmaps[info.positions[i]];
 
-        cInfo->channel_id = i;
-
-        cInfo->kind = (info.direction == VIRTIO_SND_D_OUTPUT) ?
-            B_MULTI_OUTPUT_CHANNEL : B_MULTI_INPUT_CHANNEL;
-
-        cInfo->designations = supportedChmaps[info.positions[i]];
-        if (!cInfo->designations) {
+        if (!stream->chmap[i]) {
             ERROR("unsupported channel designation (%u)\n", info.positions[i]);
 
             return B_ERROR;
-        }
-
-        if (info.channels == 2) {
-            cInfo->designations |= B_CHANNEL_STEREO_BUS;
-        } else if (info.channels > 2) {
-            cInfo->designations |= B_CHANNEL_SURROUND_BUS;
         }
     }
 
@@ -127,11 +115,7 @@ VirtIOSoundQueryChmapsInfo(VirtIOSoundDriverInfo* info)
 
         stream->channels = chmap_info[id].channels;
 
-        stream->chmap = (multi_channel_info*)calloc(stream->channels, sizeof(multi_channel_info));
-        if (stream->chmap == NULL)
-            return B_NO_MEMORY;
-
-        status_t status = create_multi_channel_info(chmap_info[id], stream->chmap);
+        status_t status = chmap_to_multi(chmap_info[id], stream);
         if (status != B_OK)
             return status;
     }

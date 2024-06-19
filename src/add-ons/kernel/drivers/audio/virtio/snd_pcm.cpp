@@ -168,8 +168,6 @@ VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info)
 
 		stream->channels_min = stream_info[i].channels_min;
 		stream->channels_max = stream_info[i].channels_max;
-
-		stream->chmap = NULL;
 	}
 
 	return B_OK;
