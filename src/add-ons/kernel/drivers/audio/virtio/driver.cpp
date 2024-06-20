@@ -266,10 +266,10 @@ static status_t
 virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length)
 {
 	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)cookie;
-	multi_description* desc = (multi_description*)buffer;
 
 	switch (op) {
-		case B_MULTI_GET_DESCRIPTION: return multi_get_description(info, desc);
+		case B_MULTI_GET_DESCRIPTION: 			return multi_get_description(info, buffer);
+		case B_MULTI_GET_ENABLED_CHANNELS:		return multi_get_enabled_channels(info, buffer);
 	}
 
 	return B_BAD_VALUE;

@@ -66,7 +66,10 @@ struct VirtIOSoundDriverInfo {
 };
 
 status_t
-multi_get_description(VirtIOSoundDriverInfo* info, multi_description* desc);
+multi_get_description(VirtIOSoundDriverInfo* info, void* buffer);
+
+status_t
+multi_get_enabled_channels(VirtIOSoundDriverInfo* info, void* buffer);
 
 status_t
 VirtIOSoundQueryInfo(VirtIOSoundDriverInfo* info, uint32 type,

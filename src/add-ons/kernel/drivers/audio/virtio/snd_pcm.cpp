@@ -115,7 +115,7 @@ VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info)
 	if (status != B_OK)
 		return status;
 
-	info->streams = (VirtIOSoundPCMInfo*)malloc(info->nStreams * sizeof(VirtIOSoundPCMInfo));
+	info->streams = (VirtIOSoundPCMInfo*)calloc(info->nStreams, sizeof(VirtIOSoundPCMInfo));
 	if (info->streams == NULL)
 		return B_NO_MEMORY;
 
