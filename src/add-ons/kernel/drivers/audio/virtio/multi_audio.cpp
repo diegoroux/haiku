@@ -11,7 +11,7 @@
 #include "driver.h"
 
 
-VirtIOSoundPCMInfo*
+static VirtIOSoundPCMInfo*
 get_stream(VirtIOSoundDriverInfo* info, uint8 direction)
 {
 	VirtIOSoundPCMInfo* stream = NULL;
@@ -59,7 +59,7 @@ create_multi_channel_info(VirtIOSoundDriverInfo* info, multi_channel_info* chann
 }
 
 
-status_t
+static status_t
 multi_get_description(VirtIOSoundDriverInfo* info, void* buffer)
 {
 	multi_description* desc = (multi_description*)buffer;
@@ -80,23 +80,23 @@ multi_get_description(VirtIOSoundDriverInfo* info, void* buffer)
 	desc->interface_flags = 0x00;
 
 	if (info->outputStreams) {
-		VirtIOSoundPCMInfo* oStream = get_stream(info, VIRTIO_SND_D_OUTPUT);
+		VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_OUTPUT);
 
-		desc->output_channel_count = oStream->channels;
+		desc->output_channel_count = stream->channels;
 
-		desc->output_rates = oStream->rates;
-		desc->output_formats = oStream->formats;
+		desc->output_rates = stream->rates;
+		desc->output_formats = stream->formats;
 
 		desc->interface_flags |= B_MULTI_INTERFACE_PLAYBACK;
 	}
 
 	if (info->inputStreams) {
-		VirtIOSoundPCMInfo* iStream = get_stream(info, VIRTIO_SND_D_INPUT);
+		VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_INPUT);
 		
-		desc->input_channel_count = iStream->channels;
+		desc->input_channel_count = stream->channels;
 
-		desc->input_rates = iStream->rates;
-		desc->input_formats = iStream->formats;
+		desc->input_rates = stream->rates;
+		desc->input_formats = stream->formats;
 
 		desc->interface_flags |= B_MULTI_INTERFACE_RECORD;
 	}
@@ -120,7 +120,7 @@ multi_get_description(VirtIOSoundDriverInfo* info, void* buffer)
 }
 
 
-status_t
+static status_t
 multi_get_enabled_channels(VirtIOSoundDriverInfo* info, void* buffer)
 {
 	multi_channel_enable* data = (multi_channel_enable*)buffer;
@@ -142,4 +142,109 @@ multi_get_enabled_channels(VirtIOSoundDriverInfo* info, void* buffer)
 	data->lock_source = B_MULTI_LOCK_INTERNAL;
 
 	return B_OK;
+}
+
+
+static status_t
+multi_get_global_format(VirtIOSoundDriverInfo* info, void* buffer)
+{
+	multi_format_info* data = (multi_format_info*)buffer;
+
+	memset(buffer, 0x00, sizeof(multi_format_info));
+
+	data->info_size = sizeof(multi_format_info);
+
+	if (info->inputStreams) {
+		VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_INPUT);
+
+		data->input.format = stream->format;
+		data->input.rate = stream->rate;
+	}
+	
+	if (info->outputStreams) {
+		VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_OUTPUT);
+
+		data->output.format = stream->format;
+		data->output.rate = stream->rate;
+	}
+
+	return B_OK;
+}
+
+
+static status_t
+multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
+{
+	multi_format_info* data = (multi_format_info*)buffer;
+
+	for (uint32 i = 0; i < 2; i++) {
+		VirtIOSoundPCMInfo* stream = get_stream(info, i);
+		if (!stream)
+			continue;
+
+		_multi_format *request;
+		switch (i) {
+			case VIRTIO_SND_D_OUTPUT:
+				request = &data->input;
+				break;
+			case VIRTIO_SND_D_INPUT:
+				request = &data->output;
+				break;
+		}
+
+		if (!(stream->formats & request->format)) {
+			ERROR("unsupported format requested (%u)\n", request->format);
+			return B_BAD_VALUE;
+		}
+
+		stream->format = request->format;
+
+		if (!(stream->rates & request->rate)) {
+			ERROR("unsupported rate requested (%u)\n", request->rate);
+			return B_BAD_VALUE;
+		}
+
+		stream->rate = request->rate;
+	}
+
+	return B_OK;
+}
+
+status_t
+virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length)
+{
+	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)cookie;
+
+	DEBUG("virtio_snd_ctrl: op: %u\n", op);
+
+	switch (op) {
+		case B_MULTI_GET_DESCRIPTION: 			return multi_get_description(info, buffer);
+		case B_MULTI_GET_EVENT_INFO:			return B_ERROR;
+		case B_MULTI_SET_EVENT_INFO:			return B_ERROR;
+		case B_MULTI_GET_EVENT:					return B_ERROR;
+		case B_MULTI_GET_ENABLED_CHANNELS:		return multi_get_enabled_channels(info, buffer);
+		case B_MULTI_SET_ENABLED_CHANNELS:		return B_OK;
+		case B_MULTI_GET_GLOBAL_FORMAT:			return multi_get_global_format(info, buffer);
+		case B_MULTI_SET_GLOBAL_FORMAT:			return multi_set_global_format(info, buffer);
+		case B_MULTI_GET_CHANNEL_FORMATS:		return B_ERROR;
+		case B_MULTI_SET_CHANNEL_FORMATS:		return B_ERROR;
+		case B_MULTI_GET_MIX:					return B_ERROR;
+		case B_MULTI_SET_MIX:					return B_ERROR;
+		case B_MULTI_LIST_MIX_CHANNELS:			return B_ERROR;
+		case B_MULTI_LIST_MIX_CONTROLS:			return B_ERROR;
+		case B_MULTI_LIST_MIX_CONNECTIONS:		return B_ERROR;
+		case B_MULTI_GET_BUFFERS:				return B_ERROR;
+		case B_MULTI_SET_BUFFERS:				return B_ERROR;
+		case B_MULTI_SET_START_TIME:			return B_ERROR;
+		case B_MULTI_BUFFER_EXCHANGE:			return B_ERROR;
+		case B_MULTI_BUFFER_FORCE_STOP:			return B_ERROR;
+		case B_MULTI_LIST_EXTENSIONS:			return B_ERROR;
+		case B_MULTI_GET_EXTENSION:				return B_ERROR;
+		case B_MULTI_SET_EXTENSION:				return B_ERROR;
+		case B_MULTI_LIST_MODES:				return B_ERROR;
+		case B_MULTI_GET_MODE:					return B_ERROR;
+		case B_MULTI_SET_MODE:					return B_ERROR;
+	}
+
+	return B_BAD_VALUE;
 }

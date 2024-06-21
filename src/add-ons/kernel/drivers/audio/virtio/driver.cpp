@@ -263,20 +263,6 @@ virtio_snd_open(void *deviceCookie, const char *path, int openMode,
 
 
 static status_t
-virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length)
-{
-	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)cookie;
-
-	switch (op) {
-		case B_MULTI_GET_DESCRIPTION: 			return multi_get_description(info, buffer);
-		case B_MULTI_GET_ENABLED_CHANNELS:		return multi_get_enabled_channels(info, buffer);
-	}
-
-	return B_BAD_VALUE;
-}
-
-
-static status_t
 virtio_snd_close(void* cookie)
 {
 	return B_OK;

@@ -17,9 +17,12 @@
 
 #ifdef _VIRTIO_SND_DEBUG
 #define DEBUG(x...)		dprintf("\33[36mvirtio_sound:\33[0m " x)
+#else
+#define DEBUG(x...)		;
 #endif
 
 #define VIRTIO_SND_CHMAP_MAX_SIZE	18
+
 
 struct VirtIOSoundPCMInfo {
 	uint32						stream_id;
@@ -29,6 +32,9 @@ struct VirtIOSoundPCMInfo {
 	uint32						features;
 	uint32						formats;
 	uint32						rates;
+
+	uint32						format;
+	uint32						rate;
 
 	uint8						direction;
 
@@ -66,10 +72,7 @@ struct VirtIOSoundDriverInfo {
 };
 
 status_t
-multi_get_description(VirtIOSoundDriverInfo* info, void* buffer);
-
-status_t
-multi_get_enabled_channels(VirtIOSoundDriverInfo* info, void* buffer);
+virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length);
 
 status_t
 VirtIOSoundQueryInfo(VirtIOSoundDriverInfo* info, uint32 type,
