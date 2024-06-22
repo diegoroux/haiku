@@ -76,7 +76,6 @@ get_stream_by_nid(VirtIOSoundDriverInfo* info, uint8 direction, uint32 nid)
 static status_t
 chmap_to_multi(struct virtio_snd_chmap_info info, VirtIOSoundPCMInfo* stream)
 {
-
     for (uint32 i = 0; i < info.channels; i++) {
         stream->chmap[i] = supportedChmaps[info.positions[i]];
 
@@ -114,6 +113,14 @@ VirtIOSoundQueryChmapsInfo(VirtIOSoundDriverInfo* info)
         }
 
         stream->channels = chmap_info[id].channels;
+        
+        if ((stream->channels > stream->channels_max) ||
+            (stream->channels < stream->channels_min)) {
+            ERROR("invalid channel in valid channel range (%u in %u-%u)\n",
+                stream->channels, stream->channels_min, stream->channels_max);
+
+            return B_ERROR;
+        }
 
         status_t status = chmap_to_multi(chmap_info[id], stream);
         if (status != B_OK)

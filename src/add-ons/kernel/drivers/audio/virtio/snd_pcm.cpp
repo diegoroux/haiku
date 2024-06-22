@@ -176,3 +176,95 @@ err1:
 	free(info->streams);
 	return status;
 }
+
+
+static uint8
+to_virtio_fmt(uint32 format)
+{
+	switch (format) {
+		case B_FMT_8BIT_S:
+			return VIRTIO_SND_PCM_FMT_S8;
+		case B_FMT_8BIT_U:
+			return VIRTIO_SND_PCM_FMT_U8;
+		case B_FMT_16BIT:
+			return VIRTIO_SND_PCM_FMT_S16;
+		case B_FMT_20BIT:
+			return VIRTIO_SND_PCM_FMT_S20;
+		case B_FMT_24BIT:
+			return VIRTIO_SND_PCM_FMT_S24;
+		case B_FMT_32BIT:
+			return VIRTIO_SND_PCM_FMT_S32;
+		case B_FMT_FLOAT:
+			return VIRTIO_SND_PCM_FMT_FLOAT;
+		case B_FMT_DOUBLE:
+			return VIRTIO_SND_PCM_FMT_FLOAT64;
+		default:
+			return B_FMT_NA;
+	}
+}
+
+
+static uint8
+to_virtio_rate(uint32 rate)
+{
+	switch (rate) {
+		case B_SR_8000:
+			return VIRTIO_SND_PCM_RATE_8000;
+		case B_SR_11025:
+			return VIRTIO_SND_PCM_RATE_11025;
+		case B_SR_16000:
+			return VIRTIO_SND_PCM_RATE_16000;
+		case B_SR_22050:
+			return VIRTIO_SND_PCM_RATE_22050;
+		case B_SR_32000:
+			return VIRTIO_SND_PCM_RATE_32000;
+		case B_SR_44100:
+			return VIRTIO_SND_PCM_RATE_44100;
+		case B_SR_48000:
+			return VIRTIO_SND_PCM_RATE_48000;
+		case B_SR_64000:
+			return VIRTIO_SND_PCM_RATE_64000;
+		case B_SR_88200:
+			return VIRTIO_SND_PCM_RATE_88200;
+		case B_SR_96000:
+			return VIRTIO_SND_PCM_RATE_96000;
+		case B_SR_176400:
+			return VIRTIO_SND_PCM_RATE_176400;
+		case B_SR_192000:
+			return VIRTIO_SND_PCM_RATE_192000;
+		case B_SR_384000:
+			return VIRTIO_SND_PCM_RATE_384000;
+		default:
+			return B_SR_NA;
+	}
+}
+
+
+status_t
+VirtIOSoundPCMSetParams(VirtIOSoundDriverInfo* info, uint32 stream_id,
+	uint32 buffer, uint32 period)
+{
+	struct virtio_snd_pcm_set_params data;
+
+	data.hdr.hdr.code = VIRTIO_SND_R_PCM_SET_PARAMS;
+	data.hdr.stream_id = stream_id;
+
+	data.buffer_bytes = buffer;
+	data.period_bytes = period;
+
+	data.features = 0;
+
+	data.channels = info->streams[stream_id].channels;
+	data.format = to_virtio_fmt(info->streams[stream_id].format);
+	data.rate = to_virtio_rate(info->streams[stream_id].rate);
+
+	data.padding = 0;
+
+	status_t status = VirtIOSoundPCMControlRequest(info, (void*)&data,
+		sizeof(struct virtio_snd_pcm_set_params));
+
+	if (status != B_OK)
+		return status;
+
+	return B_OK;
+}

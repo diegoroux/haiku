@@ -140,3 +140,25 @@ VirtIOEventQueueInit(VirtIOSoundDriverInfo* info)
 
 	return B_OK;
 }
+
+
+status_t
+VirtIOSoundPCMControlRequest(VirtIOSoundDriverInfo* info, void* buffer, size_t size)
+{
+	if (!info->virtio->queue_is_empty(info->controlQueue))
+		return B_ERROR;
+
+	memcpy((void*)info->ctrlBuf, buffer, size);
+
+	physical_entry entries[] = {
+		{info->ctrlAddr, size}
+	};
+
+	status_t status = info->virtio->queue_request_v(info->controlQueue, entries, 1, 0, NULL);
+	if (status != B_OK)
+		return status;
+
+	while (!info->virtio->queue_dequeue(info->controlQueue, NULL, NULL));
+
+	return B_OK;
+}

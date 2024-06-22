@@ -205,6 +205,11 @@ multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 		}
 
 		stream->rate = request->rate;
+
+		// TODO: Determine buffer & period size.
+		status_t status = VirtIOSoundPCMSetParams(info, stream->stream_id, 0, 0);
+		if (status != B_OK)
+			return status;
 	}
 
 	return B_OK;

@@ -94,4 +94,11 @@ VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info);
 status_t
 VirtIOSoundQueryChmapsInfo(VirtIOSoundDriverInfo* info);
 
+status_t
+VirtIOSoundPCMControlRequest(VirtIOSoundDriverInfo* info, void* buffer, size_t size);
+
+status_t
+VirtIOSoundPCMSetParams(VirtIOSoundDriverInfo* info, uint32 stream_id,
+	uint32 buffer, uint32 period);
+
 #endif
