@@ -210,12 +210,20 @@ multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 	return B_OK;
 }
 
+
+static status_t
+multi_get_buffers(VirtIOSoundDriverInfo* info, void* buffer)
+{
+	return B_ERROR; // B_OK;
+}
+
+
 status_t
 virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length)
 {
 	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)cookie;
 
-	DEBUG("virtio_snd_ctrl: op: %u\n", op);
+	DEBUG("op: %u\n", op);
 
 	switch (op) {
 		case B_MULTI_GET_DESCRIPTION: 			return multi_get_description(info, buffer);
@@ -233,7 +241,7 @@ virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length)
 		case B_MULTI_LIST_MIX_CHANNELS:			return B_ERROR;
 		case B_MULTI_LIST_MIX_CONTROLS:			return B_ERROR;
 		case B_MULTI_LIST_MIX_CONNECTIONS:		return B_ERROR;
-		case B_MULTI_GET_BUFFERS:				return B_ERROR;
+		case B_MULTI_GET_BUFFERS:				return multi_get_buffers(info, buffer);
 		case B_MULTI_SET_BUFFERS:				return B_ERROR;
 		case B_MULTI_SET_START_TIME:			return B_ERROR;
 		case B_MULTI_BUFFER_EXCHANGE:			return B_ERROR;

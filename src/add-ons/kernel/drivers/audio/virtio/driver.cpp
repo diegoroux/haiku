@@ -146,37 +146,16 @@ virtio_snd_init_device(void* _info, void** cookie)
 	info->txQueue = queues[2];
 	info->rxQueue = queues[3];
 
-	info->ctrlArea = create_area("virtio_snd ctrl buffer", (void**)&info->ctrlBuf,
-		B_ANY_KERNEL_BLOCK_ADDRESS, B_PAGE_SIZE, B_FULL_LOCK,
-		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
-	
-	if (info->ctrlArea < 0) {
-		status = info->ctrlArea;
-
-		ERROR("unable to create buffer area (%s)\n", strerror(status));
-		goto err1;
-	}
-
-	physical_entry entry;
-	status = get_memory_map((void*)info->ctrlBuf, B_PAGE_SIZE, &entry, 1);
-	if (status != B_OK) {
-		ERROR("unable to get memory map (%s)\n", strerror(status));
-		goto err2;
-	}
-
-	info->ctrlAddr = entry.address;
-
 	status = info->virtio->setup_interrupt(info->virtioDev, NULL, info);
 	if (status != B_OK) {
 		ERROR("interrupt setup failed (%s)\n", strerror(status));
 		goto err2;
 	}
 
-	status = info->virtio->queue_setup_interrupt(info->controlQueue,
-		NULL, info);
+	status = VirtIOControlQueueInit(info);
 	if (status != B_OK) {
-		ERROR("queue interrupt setup failed (%s)\n", strerror(status));
-		goto err2;
+		ERROR("unable to initialize the control queue\n");
+		goto err1;
 	}
 
 	status = info->virtio->read_device_config(info->virtioDev,
@@ -219,12 +198,18 @@ virtio_snd_init_device(void* _info, void** cookie)
 		goto err2;
 	}
 
-	if (info->nChmaps > 0) {
+	if (info->nChmaps) {
 		status = VirtIOSoundQueryChmapsInfo(info);
 		if (status != B_OK) {
 			ERROR("stream info query failed (%s)\n", strerror(status));
 			goto err2;
 		}
+	}
+
+	status = VirtIOEventQueueInit(info);
+	if (status != B_OK) {
+		ERROR("unable to initialize the event queue\n");
+		goto err2;
 	}
 
 	*cookie = info;
@@ -241,12 +226,12 @@ err1:
 static void
 virtio_snd_uninit_device(void *_info)
 {
-	VirtIOSoundDriverInfo* info;
-	
-	info = (VirtIOSoundDriverInfo*)_info;
+	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)_info;
+
 	info->virtio->free_queues(info->virtioDev);
 
 	delete_area(info->ctrlArea);
+	delete_area(info->eventArea);
 
 	return;
 }

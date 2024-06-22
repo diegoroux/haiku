@@ -59,3 +59,84 @@ VirtIOSoundQueryInfo(VirtIOSoundDriverInfo* info, uint32 type,
 
 	return B_OK;
 }
+
+
+status_t
+VirtIOControlQueueInit(VirtIOSoundDriverInfo* info)
+{
+	info->ctrlArea = create_area("virtio_snd ctrl buffer", (void**)&info->ctrlBuf,
+		B_ANY_KERNEL_BLOCK_ADDRESS, B_PAGE_SIZE, B_FULL_LOCK,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+
+	status_t status = info->ctrlArea;
+	if (status < 0) {
+		ERROR("unable to create buffer area (%s)\n", strerror(status));
+		return status;
+	}
+
+	physical_entry entry;
+	status = get_memory_map((void*)info->ctrlBuf, B_PAGE_SIZE, &entry, 1);
+	if (status != B_OK) {
+		ERROR("unable to get memory map (%s)\n", strerror(status));
+		return status;
+	}
+
+	info->ctrlAddr = entry.address;
+
+	status = info->virtio->queue_setup_interrupt(info->controlQueue, NULL, info);
+	if (status != B_OK) {
+		ERROR("ctrl queue interrupt setup failed (%s)\n", strerror(status));
+		delete_area(info->ctrlArea);
+		return B_ERROR;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+VirtIOEventQueueInit(VirtIOSoundDriverInfo* info)
+{
+	info->eventArea = create_area("virtio_snd event buffer", (void**)&info->eventBuf,
+		B_ANY_KERNEL_BLOCK_ADDRESS, B_PAGE_SIZE, B_FULL_LOCK,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+	
+	status_t status = info->eventArea;
+	if (status < 0) {
+		ERROR("unable to create buffer area (%s)\n", strerror(status));
+		return status;
+	}
+
+	physical_entry entry;
+	status = get_memory_map((void*)info->eventBuf, B_PAGE_SIZE, &entry, 1);
+	if (status != B_OK) {
+		ERROR("unable to get memory map (%s)\n", strerror(status));
+		return status;
+	}
+
+	info->eventAddr = entry.address;
+
+	memset((void*)info->eventBuf, 0x00, sizeof(struct virtio_snd_event) * 2);
+
+	if (!info->virtio->queue_is_empty(info->controlQueue))
+		return B_ERROR;
+
+	physical_entry entries[] = {
+		{info->eventAddr, sizeof(struct virtio_snd_event)},
+		{info->eventAddr + sizeof(struct virtio_snd_event), sizeof(struct virtio_snd_event)}
+	};
+
+	status = info->virtio->queue_request_v(info->eventQueue, entries, 0, 2, NULL);
+	if (status != B_OK)
+		return status;
+
+	status = info->virtio->queue_setup_interrupt(info->eventQueue, NULL, info);
+	if (status != B_OK) {
+		ERROR("event queue interrupt setup failed (%s)\n", strerror(status));
+		delete_area(info->eventArea);
+
+		return status;
+	}
+
+	return B_OK;
+}

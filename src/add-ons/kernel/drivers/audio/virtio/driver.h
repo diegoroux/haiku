@@ -16,7 +16,7 @@
 #define LOG(x...)		dprintf("virtio_sound: " x)
 
 #ifdef _VIRTIO_SND_DEBUG
-#define DEBUG(x...)		dprintf("\33[36mvirtio_sound:\33[0m " x)
+#define DEBUG(x...)		dprintf("\33[36mvirtio_sound:\33[0m " __func__ ": " x)
 #else
 #define DEBUG(x...)		;
 #endif
@@ -69,6 +69,10 @@ struct VirtIOSoundDriverInfo {
 	area_id						ctrlArea;
 	addr_t						ctrlBuf;
 	phys_addr_t					ctrlAddr;
+
+	area_id						eventArea;
+	addr_t						eventBuf;
+	phys_addr_t					eventAddr;
 };
 
 status_t
@@ -77,6 +81,12 @@ virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length);
 status_t
 VirtIOSoundQueryInfo(VirtIOSoundDriverInfo* info, uint32 type,
 	uint32 start_id, uint32 count, uint32 size, void* response);
+
+status_t
+VirtIOControlQueueInit(VirtIOSoundDriverInfo* info);
+
+status_t
+VirtIOEventQueueInit(VirtIOSoundDriverInfo* info);
 
 status_t
 VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info);
