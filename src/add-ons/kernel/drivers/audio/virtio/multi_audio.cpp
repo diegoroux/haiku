@@ -10,6 +10,8 @@
 #include "virtio_sound.h"
 #include "driver.h"
 
+#define FRAMES_PER_BUFFER	1024
+
 
 static VirtIOSoundPCMInfo*
 get_stream(VirtIOSoundDriverInfo* info, uint8 direction)
@@ -172,6 +174,28 @@ multi_get_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 }
 
 
+static uint8
+format_to_size(uint32 format)
+{
+	switch (format) {
+		case B_FMT_8BIT_S:
+		case B_FMT_8BIT_U:
+			return 1;
+		case B_FMT_16BIT:
+			return 2;
+		case B_FMT_20BIT:
+		case B_FMT_24BIT:
+		case B_FMT_32BIT:
+		case B_FMT_FLOAT:
+			return 4;
+		case B_FMT_DOUBLE:
+			return 8;
+		default:
+			return 0;
+	}
+}
+
+
 static status_t
 multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 {
@@ -197,17 +221,20 @@ multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 			return B_BAD_VALUE;
 		}
 
-		stream->format = request->format;
-
 		if (!(stream->rates & request->rate)) {
 			ERROR("unsupported rate requested (%u)\n", request->rate);
 			return B_BAD_VALUE;
 		}
 
+		stream->format = request->format;
 		stream->rate = request->rate;
 
-		// TODO: Determine buffer & period size.
-		status_t status = VirtIOSoundPCMSetParams(info, stream->stream_id, 0, 0);
+		stream->period_size = stream->channels * format_to_size(stream->format)
+			* FRAMES_PER_BUFFER;
+
+		status_t status = VirtIOSoundPCMSetParams(info, stream->stream_id,
+			stream->period_size * 2, stream->period_size);
+
 		if (status != B_OK)
 			return status;
 	}

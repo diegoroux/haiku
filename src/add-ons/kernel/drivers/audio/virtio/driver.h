@@ -36,6 +36,10 @@ struct VirtIOSoundPCMInfo {
 	uint32						format;
 	uint32						rate;
 
+	uint32 						period_size;
+
+	uint8						current_state;
+
 	uint8						direction;
 
 	uint8						channels;
