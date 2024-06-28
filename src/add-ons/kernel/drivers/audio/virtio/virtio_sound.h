@@ -183,6 +183,10 @@ struct virtio_snd_pcm_set_params {
     uint8 padding; 
 };
 
+struct virtio_snd_pcm_prepare {
+    struct virtio_snd_pcm_hdr hdr;
+};
+
 /* an I/O header */ 
 struct virtio_snd_pcm_xfer { 
     uint32 stream_id; 

@@ -77,6 +77,14 @@ struct VirtIOSoundDriverInfo {
 	area_id						eventArea;
 	addr_t						eventBuf;
 	phys_addr_t					eventAddr;
+
+	area_id						txArea;
+	addr_t						txBuf;
+	phys_addr_t					txAddr;
+
+	area_id						rxArea;
+	addr_t						rxBuf;
+	phys_addr_t					rxAddr;
 };
 
 status_t
@@ -104,5 +112,14 @@ VirtIOSoundPCMControlRequest(VirtIOSoundDriverInfo* info, void* buffer, size_t s
 status_t
 VirtIOSoundPCMSetParams(VirtIOSoundDriverInfo* info, uint32 stream_id,
 	uint32 buffer, uint32 period);
+
+status_t
+VirtIOSoundPCMPrepare(VirtIOSoundDriverInfo* info, uint32 stream_id);
+
+status_t
+VirtIOSoundTXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream);
+
+status_t
+VirtIOSoundRXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream);
 
 #endif

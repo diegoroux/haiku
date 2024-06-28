@@ -12,6 +12,9 @@
 #include "driver.h"
 #include "virtio_sound.h"
 
+#define ROUND_TO_PAGE_SIZE(x) (x + B_PAGE_SIZE - 1) & (~(B_PAGE_SIZE - 1))
+
+
 status_t
 VirtIOSoundQueryInfo(VirtIOSoundDriverInfo* info, uint32 type,
 	uint32 start_id, uint32 count, uint32 size, void* response)
@@ -159,6 +162,68 @@ VirtIOSoundPCMControlRequest(VirtIOSoundDriverInfo* info, void* buffer, size_t s
 		return status;
 
 	while (!info->virtio->queue_dequeue(info->controlQueue, NULL, NULL));
+
+	return B_OK;
+}
+
+
+status_t
+VirtIOSoundTXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
+{
+	uint32 tx_size = sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * 2)
+		+ sizeof(struct virtio_snd_pcm_status);
+
+	tx_size = ROUND_TO_PAGE_SIZE(tx_size);
+
+	info->txArea = create_area("virtio_snd tx buffer", (void**)&info->txBuf,
+		B_ANY_KERNEL_BLOCK_ADDRESS, tx_size, B_FULL_LOCK,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+
+	status_t status = info->txArea;
+	if (status < 0) {
+		ERROR("unable to create tx buffer area (%s)\n", strerror(status));
+		return status;
+	}
+
+	physical_entry entry;
+	status = get_memory_map((void*)info->txBuf, tx_size, &entry, 1);
+	if (status != B_OK) {
+		ERROR("unable to get tx memory map (%s)\n", strerror(status));
+		return status;
+	}
+
+	info->txAddr = entry.address;
+
+	return B_OK;
+}
+
+
+status_t
+VirtIOSoundRXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
+{
+	uint32 rx_size = sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * 2)
+		+ sizeof(struct virtio_snd_pcm_status);
+
+	rx_size = ROUND_TO_PAGE_SIZE(rx_size);
+
+	info->rxArea = create_area("virtio_snd rx buffer", (void**)&info->rxBuf,
+		B_ANY_KERNEL_BLOCK_ADDRESS, rx_size, B_FULL_LOCK,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+
+	status_t status = info->rxArea;
+	if (status < 0) {
+		ERROR("unable to create rx buffer area (%s)\n", strerror(status));
+		return status;
+	}
+
+	physical_entry entry;
+	status = get_memory_map((void*)info->rxBuf, rx_size, &entry, 1);
+	if (status != B_OK) {
+		ERROR("unable to get rx memory map (%s)\n", strerror(status));
+		return status;
+	}
+
+	info->rxAddr = entry.address;
 
 	return B_OK;
 }

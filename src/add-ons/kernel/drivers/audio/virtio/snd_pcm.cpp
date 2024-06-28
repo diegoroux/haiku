@@ -268,3 +268,21 @@ VirtIOSoundPCMSetParams(VirtIOSoundDriverInfo* info, uint32 stream_id,
 
 	return B_OK;
 }
+
+
+status_t
+VirtIOSoundPCMPrepare(VirtIOSoundDriverInfo* info, uint32 stream_id)
+{
+	struct virtio_snd_pcm_prepare data;
+
+	data.hdr.hdr.code = VIRTIO_SND_R_PCM_PREPARE;
+	data.hdr.stream_id = stream_id;
+
+	status_t status = VirtIOSoundPCMControlRequest(info, (void*)&data,
+		sizeof(struct virtio_snd_pcm_prepare));
+
+	if (status != B_OK)
+		return status;
+
+	return B_OK;
+}

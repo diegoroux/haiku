@@ -246,7 +246,68 @@ multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 static status_t
 multi_get_buffers(VirtIOSoundDriverInfo* info, void* buffer)
 {
-	return B_ERROR; // B_OK;
+	multi_buffer_list* data = (multi_buffer_list*)buffer;
+
+	data->flags = 0x00;
+
+	for (uint32 i = 0; i < 2; i++) {
+		VirtIOSoundPCMInfo* stream = get_stream(info, i);
+		if (!stream)
+			continue;
+
+		buffer_desc** buffers;
+		status_t status;
+		char* buf_ptr;
+
+		switch (i) {
+			case VIRTIO_SND_D_OUTPUT: {
+				status = VirtIOSoundTXQueueInit(info, stream);
+
+				data->flags |= B_MULTI_BUFFER_PLAYBACK;
+
+				data->return_playback_buffers = 2;
+				data->return_playback_channels = stream->channels;
+				data->return_playback_buffer_size  = FRAMES_PER_BUFFER;
+
+				buffers = data->playback_buffers;
+
+				buf_ptr = (char*)info->txBuf;
+				break;
+			}
+			case VIRTIO_SND_D_INPUT: {
+				status = VirtIOSoundRXQueueInit(info, stream);
+
+				data->flags |= B_MULTI_BUFFER_RECORD;
+
+				data->return_record_buffers = 2;
+				data->return_record_channels = stream->channels;
+				data->return_record_buffer_size  = FRAMES_PER_BUFFER;
+
+				buffers = data->record_buffers;
+
+				buf_ptr = (char*)info->rxBuf;
+				break;
+			}
+		}
+
+		if (status != B_OK)
+			return status;
+
+		uint32 format_size = format_to_size(stream->format);
+
+		for (uint32 buf_id = 0; buf_id < 2; buf_id++) {
+			for (uint32 ch_id = 0; ch_id < stream->channels; ch_id++) {
+				buffers[buf_id][ch_id].base = buf_ptr + (format_size * ch_id);
+				buffers[buf_id][ch_id].stride = format_size * stream->channels;
+			}
+		}
+
+		status = VirtIOSoundPCMPrepare(info, stream->stream_id);
+		if (status != B_OK)
+			return status;
+	}	
+
+	return B_OK;
 }
 
 
