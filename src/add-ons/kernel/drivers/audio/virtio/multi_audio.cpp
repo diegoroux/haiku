@@ -10,8 +10,6 @@
 #include "virtio_sound.h"
 #include "driver.h"
 
-#define FRAMES_PER_BUFFER	1024
-
 
 static VirtIOSoundPCMInfo*
 get_stream(VirtIOSoundDriverInfo* info, uint8 direction)
@@ -126,7 +124,7 @@ static status_t
 multi_get_enabled_channels(VirtIOSoundDriverInfo* info, void* buffer)
 {
 	multi_channel_enable* data = (multi_channel_enable*)buffer;
-	uint32 channels =  0;
+	uint32 channels = 0;
 	
 	if (info->inputStreams) {
 		VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_INPUT);
@@ -232,8 +230,8 @@ multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 		stream->period_size = stream->channels * format_to_size(stream->format)
 			* FRAMES_PER_BUFFER;
 
-		status_t status = VirtIOSoundPCMSetParams(info, stream->stream_id,
-			stream->period_size * 2, stream->period_size);
+		status_t status = VirtIOSoundPCMSetParams(info, stream,
+			stream->period_size * BUFFERS, stream->period_size);
 
 		if (status != B_OK)
 			return status;
@@ -265,9 +263,9 @@ multi_get_buffers(VirtIOSoundDriverInfo* info, void* buffer)
 
 				data->flags |= B_MULTI_BUFFER_PLAYBACK;
 
-				data->return_playback_buffers = 2;
+				data->return_playback_buffers = BUFFERS;
 				data->return_playback_channels = stream->channels;
-				data->return_playback_buffer_size  = FRAMES_PER_BUFFER;
+				data->return_playback_buffer_size = FRAMES_PER_BUFFER;
 
 				buffers = data->playback_buffers;
 
@@ -279,9 +277,9 @@ multi_get_buffers(VirtIOSoundDriverInfo* info, void* buffer)
 
 				data->flags |= B_MULTI_BUFFER_RECORD;
 
-				data->return_record_buffers = 2;
+				data->return_record_buffers = BUFFERS;
 				data->return_record_channels = stream->channels;
-				data->return_record_buffer_size  = FRAMES_PER_BUFFER;
+				data->return_record_buffer_size = FRAMES_PER_BUFFER;
 
 				buffers = data->record_buffers;
 
@@ -295,14 +293,16 @@ multi_get_buffers(VirtIOSoundDriverInfo* info, void* buffer)
 
 		uint32 format_size = format_to_size(stream->format);
 
-		for (uint32 buf_id = 0; buf_id < 2; buf_id++) {
+		for (uint32 buf_id = 0; buf_id < BUFFERS; buf_id++) {
 			for (uint32 ch_id = 0; ch_id < stream->channels; ch_id++) {
 				buffers[buf_id][ch_id].base = buf_ptr + (format_size * ch_id);
 				buffers[buf_id][ch_id].stride = format_size * stream->channels;
 			}
+
+			buf_ptr += stream->period_size;
 		}
 
-		status = VirtIOSoundPCMPrepare(info, stream->stream_id);
+		status = VirtIOSoundPCMPrepare(info, stream);
 		if (status != B_OK)
 			return status;
 	}	

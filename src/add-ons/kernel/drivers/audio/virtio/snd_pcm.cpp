@@ -241,22 +241,27 @@ to_virtio_rate(uint32 rate)
 
 
 status_t
-VirtIOSoundPCMSetParams(VirtIOSoundDriverInfo* info, uint32 stream_id,
+VirtIOSoundPCMSetParams(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream,
 	uint32 buffer, uint32 period)
 {
+	if ((stream->current_state != VIRTIO_SND_STATE_SET_PARAMETERS) &&
+		(stream->current_state != VIRTIO_SND_STATE_PREPARE) &&
+		(stream->current_state != VIRTIO_SND_STATE_RELEASE))
+		return B_NOT_ALLOWED;
+
 	struct virtio_snd_pcm_set_params data;
 
 	data.hdr.hdr.code = VIRTIO_SND_R_PCM_SET_PARAMS;
-	data.hdr.stream_id = stream_id;
+	data.hdr.stream_id = stream->stream_id;
 
 	data.buffer_bytes = buffer;
 	data.period_bytes = period;
 
 	data.features = 0;
 
-	data.channels = info->streams[stream_id].channels;
-	data.format = to_virtio_fmt(info->streams[stream_id].format);
-	data.rate = to_virtio_rate(info->streams[stream_id].rate);
+	data.channels = stream->channels;
+	data.format = to_virtio_fmt(stream->format);
+	data.rate = to_virtio_rate(stream->rate);
 
 	data.padding = 0;
 
@@ -266,23 +271,103 @@ VirtIOSoundPCMSetParams(VirtIOSoundDriverInfo* info, uint32 stream_id,
 	if (status != B_OK)
 		return status;
 
+	stream->current_state = VIRTIO_SND_STATE_SET_PARAMETERS;
+
 	return B_OK;
 }
 
 
 status_t
-VirtIOSoundPCMPrepare(VirtIOSoundDriverInfo* info, uint32 stream_id)
+VirtIOSoundPCMPrepare(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 {
+	if ((stream->current_state != VIRTIO_SND_STATE_SET_PARAMETERS) &&
+		(stream->current_state != VIRTIO_SND_STATE_PREPARE) &&
+		(stream->current_state != VIRTIO_SND_STATE_RELEASE))
+		return B_NOT_ALLOWED;
+
 	struct virtio_snd_pcm_prepare data;
 
 	data.hdr.hdr.code = VIRTIO_SND_R_PCM_PREPARE;
-	data.hdr.stream_id = stream_id;
+	data.hdr.stream_id = stream->stream_id;
 
 	status_t status = VirtIOSoundPCMControlRequest(info, (void*)&data,
 		sizeof(struct virtio_snd_pcm_prepare));
 
 	if (status != B_OK)
 		return status;
+
+	stream->current_state = VIRTIO_SND_STATE_PREPARE;
+
+	return B_OK;
+}
+
+
+status_t
+VirtIOSoundPCMStart(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
+{
+	if ((stream->current_state != VIRTIO_SND_STATE_PREPARE) &&
+		(stream->current_state != VIRTIO_SND_STATE_STOP))
+		return B_NOT_ALLOWED;
+
+	struct virtio_snd_pcm_start data;
+
+	data.hdr.hdr.code = VIRTIO_SND_R_PCM_START;
+	data.hdr.stream_id = stream->stream_id;
+
+	status_t status = VirtIOSoundPCMControlRequest(info, (void*)&data,
+		sizeof(struct virtio_snd_pcm_prepare));
+
+	if (status != B_OK)
+		return status;
+
+	stream->current_state = VIRTIO_SND_STATE_START;
+
+	return B_OK;
+}
+
+
+status_t
+VirtIOSoundPCMStop(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
+{
+	if (stream->current_state != VIRTIO_SND_STATE_START)
+		return B_NOT_ALLOWED;
+
+	struct virtio_snd_pcm_start data;
+
+	data.hdr.hdr.code = VIRTIO_SND_R_PCM_STOP;
+	data.hdr.stream_id = stream->stream_id;
+
+	status_t status = VirtIOSoundPCMControlRequest(info, (void*)&data,
+		sizeof(struct virtio_snd_pcm_prepare));
+
+	if (status != B_OK)
+		return status;
+
+	stream->current_state = VIRTIO_SND_STATE_STOP;
+
+	return B_OK;
+}
+
+
+status_t
+VirtIOSoundPCMRelease(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
+{
+	if ((stream->current_state != VIRTIO_SND_STATE_PREPARE) &&
+		(stream->current_state != VIRTIO_SND_STATE_STOP))
+		return B_NOT_ALLOWED;
+
+	struct virtio_snd_pcm_start data;
+
+	data.hdr.hdr.code = VIRTIO_SND_R_PCM_RELEASE;
+	data.hdr.stream_id = stream->stream_id;
+
+	status_t status = VirtIOSoundPCMControlRequest(info, (void*)&data,
+		sizeof(struct virtio_snd_pcm_prepare));
+
+	if (status != B_OK)
+		return status;
+
+	stream->current_state = VIRTIO_SND_STATE_RELEASE;
 
 	return B_OK;
 }

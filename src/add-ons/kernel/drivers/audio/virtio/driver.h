@@ -23,6 +23,9 @@
 
 #define VIRTIO_SND_CHMAP_MAX_SIZE	18
 
+#define FRAMES_PER_BUFFER	1024
+#define BUFFERS				2
+
 
 struct VirtIOSoundPCMInfo {
 	uint32						stream_id;
@@ -81,6 +84,7 @@ struct VirtIOSoundDriverInfo {
 	area_id						txArea;
 	addr_t						txBuf;
 	phys_addr_t					txAddr;
+	spinlock					txLock;
 
 	area_id						rxArea;
 	addr_t						rxBuf;
@@ -110,11 +114,11 @@ status_t
 VirtIOSoundPCMControlRequest(VirtIOSoundDriverInfo* info, void* buffer, size_t size);
 
 status_t
-VirtIOSoundPCMSetParams(VirtIOSoundDriverInfo* info, uint32 stream_id,
+VirtIOSoundPCMSetParams(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream,
 	uint32 buffer, uint32 period);
 
 status_t
-VirtIOSoundPCMPrepare(VirtIOSoundDriverInfo* info, uint32 stream_id);
+VirtIOSoundPCMPrepare(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream);
 
 status_t
 VirtIOSoundTXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream);

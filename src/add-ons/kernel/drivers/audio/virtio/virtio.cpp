@@ -81,7 +81,7 @@ VirtIOControlQueueInit(VirtIOSoundDriverInfo* info)
 	status = get_memory_map((void*)info->ctrlBuf, B_PAGE_SIZE, &entry, 1);
 	if (status != B_OK) {
 		ERROR("unable to get memory map (%s)\n", strerror(status));
-		return status;
+		goto err1;
 	}
 
 	info->ctrlAddr = entry.address;
@@ -89,11 +89,14 @@ VirtIOControlQueueInit(VirtIOSoundDriverInfo* info)
 	status = info->virtio->queue_setup_interrupt(info->controlQueue, NULL, info);
 	if (status != B_OK) {
 		ERROR("ctrl queue interrupt setup failed (%s)\n", strerror(status));
-		delete_area(info->ctrlArea);
-		return B_ERROR;
+		goto err1;
 	}
 
 	return B_OK;
+
+err1:
+	delete_area(info->ctrlArea);
+	return status;
 }
 
 
@@ -110,38 +113,43 @@ VirtIOEventQueueInit(VirtIOSoundDriverInfo* info)
 		return status;
 	}
 
+	memset((void*)info->eventBuf, 0x00, sizeof(struct virtio_snd_event) * 2);
+
 	physical_entry entry;
 	status = get_memory_map((void*)info->eventBuf, B_PAGE_SIZE, &entry, 1);
 	if (status != B_OK) {
 		ERROR("unable to get memory map (%s)\n", strerror(status));
+		delete_area(info->eventArea);
 		return status;
 	}
 
 	info->eventAddr = entry.address;
-
-	memset((void*)info->eventBuf, 0x00, sizeof(struct virtio_snd_event) * 2);
-
-	if (!info->virtio->queue_is_empty(info->controlQueue))
-		return B_ERROR;
 
 	physical_entry entries[] = {
 		{info->eventAddr, sizeof(struct virtio_snd_event)},
 		{info->eventAddr + sizeof(struct virtio_snd_event), sizeof(struct virtio_snd_event)}
 	};
 
+	if (!info->virtio->queue_is_empty(info->controlQueue)) {
+		status = B_ERROR;
+		goto err1;
+	}
+
 	status = info->virtio->queue_request_v(info->eventQueue, entries, 0, 2, NULL);
 	if (status != B_OK)
-		return status;
+		goto err1;
 
 	status = info->virtio->queue_setup_interrupt(info->eventQueue, NULL, info);
 	if (status != B_OK) {
 		ERROR("event queue interrupt setup failed (%s)\n", strerror(status));
-		delete_area(info->eventArea);
-
-		return status;
+		goto err1;
 	}
 
 	return B_OK;
+
+err1:
+	delete_area(info->eventArea);
+	return status;
 }
 
 
@@ -176,8 +184,8 @@ VirtIOSoundTXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 	tx_size = ROUND_TO_PAGE_SIZE(tx_size);
 
 	info->txArea = create_area("virtio_snd tx buffer", (void**)&info->txBuf,
-		B_ANY_KERNEL_BLOCK_ADDRESS, tx_size, B_FULL_LOCK,
-		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+		B_ANY_KERNEL_ADDRESS, tx_size, B_CONTIGUOUS,
+		B_READ_AREA | B_WRITE_AREA);
 
 	status_t status = info->txArea;
 	if (status < 0) {
@@ -189,19 +197,23 @@ VirtIOSoundTXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 	status = get_memory_map((void*)info->txBuf, tx_size, &entry, 1);
 	if (status != B_OK) {
 		ERROR("unable to get tx memory map (%s)\n", strerror(status));
-		return status;
+		goto err1;
 	}
 
 	info->txAddr = entry.address;
 
 	return B_OK;
+
+err1:
+	delete_area(info->txArea);
+	return status;
 }
 
 
 status_t
 VirtIOSoundRXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 {
-	uint32 rx_size = sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * 2)
+	uint32 rx_size = sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * BUFFERS)
 		+ sizeof(struct virtio_snd_pcm_status);
 
 	rx_size = ROUND_TO_PAGE_SIZE(rx_size);
@@ -220,10 +232,20 @@ VirtIOSoundRXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 	status = get_memory_map((void*)info->rxBuf, rx_size, &entry, 1);
 	if (status != B_OK) {
 		ERROR("unable to get rx memory map (%s)\n", strerror(status));
-		return status;
+		goto err1;
 	}
 
 	info->rxAddr = entry.address;
 
+	status = info->virtio->queue_setup_interrupt(info->rxQueue, NULL, info);
+	if (status != B_OK) {
+		ERROR("rx queue interrupt setup failed (%s)\n", strerror(status));
+		goto err1;
+	}
+
 	return B_OK;
+
+err1:
+	delete_area(info->rxArea);
+	return status;
 }

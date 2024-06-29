@@ -7,16 +7,17 @@
 
 
 struct virtio_snd_config { 
-	uint32_t jacks; 
-	uint32_t streams; 
-	uint32_t chmaps; 
+	uint32 jacks; 
+	uint32 streams; 
+	uint32 chmaps; 
 };
+
 
 enum { 
     /* jack control request types */ 
     VIRTIO_SND_R_JACK_INFO = 1, 
     VIRTIO_SND_R_JACK_REMAP, 
- 
+
     /* PCM control request types */ 
     VIRTIO_SND_R_PCM_INFO = 0x0100, 
     VIRTIO_SND_R_PCM_SET_PARAMS, 
@@ -24,82 +25,93 @@ enum {
     VIRTIO_SND_R_PCM_RELEASE, 
     VIRTIO_SND_R_PCM_START, 
     VIRTIO_SND_R_PCM_STOP, 
- 
+
     /* channel map control request types */ 
     VIRTIO_SND_R_CHMAP_INFO = 0x0200, 
- 
+
     /* jack event types */ 
     VIRTIO_SND_EVT_JACK_CONNECTED = 0x1000, 
     VIRTIO_SND_EVT_JACK_DISCONNECTED, 
- 
+
     /* PCM event types */ 
     VIRTIO_SND_EVT_PCM_PERIOD_ELAPSED = 0x1100, 
     VIRTIO_SND_EVT_PCM_XRUN, 
- 
+
     /* common status codes */ 
     VIRTIO_SND_S_OK = 0x8000, 
     VIRTIO_SND_S_BAD_MSG, 
     VIRTIO_SND_S_NOT_SUPP, 
     VIRTIO_SND_S_IO_ERR 
 }; 
- 
+
+
 /* a common header */ 
 struct virtio_snd_hdr { 
-    uint32_t code; 
+    uint32 code; 
 }; 
- 
+
+
 /* an event notification */ 
 struct virtio_snd_event { 
-    struct virtio_snd_hdr hdr; 
-    uint32_t data; 
+    struct virtio_snd_hdr   hdr; 
+    uint32                  data;
 };
+
 
 enum { 
     VIRTIO_SND_D_OUTPUT = 0, 
     VIRTIO_SND_D_INPUT 
 };
 
+
 struct virtio_snd_query_info { 
     struct virtio_snd_hdr   hdr;
-    uint32_t                start_id;
-    uint32_t                count;
-    uint32_t                size;
+    uint32					start_id;
+    uint32					count;
+    uint32					size;
 };
+
 
 struct virtio_snd_info { 
-    uint32_t hda_fn_nid; 
+    uint32 hda_fn_nid; 
 };
 
+
 struct virtio_snd_jack_hdr { 
-    struct virtio_snd_hdr   hdr; 
-    uint32_t                jack_id; 
+    struct virtio_snd_hdr	hdr; 
+    uint32					jack_id; 
 };
+
 
 /* supported jack features */ 
 enum { 
     VIRTIO_SND_JACK_F_REMAP = 0 
 }; 
- 
+
+
 struct virtio_snd_jack_info { 
     struct virtio_snd_info  hdr; 
-    uint32_t                features; /* 1 << VIRTIO_SND_JACK_F_XXX */ 
-    uint32_t                hda_reg_defconf; 
-    uint32_t                hda_reg_caps; 
-    uint8_t                 connected; 
+    uint32					features; /* 1 << VIRTIO_SND_JACK_F_XXX */ 
+    uint32					hda_reg_defconf; 
+    uint32					hda_reg_caps; 
+    uint8					connected; 
  
-    uint8_t                 padding[7]; 
+    uint8					padding[7]; 
 };
+
 
 struct virtio_snd_jack_remap { 
-    struct virtio_snd_jack_hdr hdr; /* .code = VIRTIO_SND_R_JACK_REMAP */ 
-    uint32_t association; 
-    uint32_t sequence; 
+    struct virtio_snd_jack_hdr  hdr; /* .code = VIRTIO_SND_R_JACK_REMAP */ 
+    uint32 						association; 
+    uint32 						sequence; 
 };
 
+
 struct virtio_snd_pcm_hdr { 
-    struct virtio_snd_hdr hdr; 
-    uint32_t stream_id; 
+    struct virtio_snd_hdr   hdr; 
+    uint32_t                stream_id; 
 };
+
 
 /* supported PCM stream features */ 
 enum { 
@@ -109,7 +121,8 @@ enum {
     VIRTIO_SND_PCM_F_EVT_SHMEM_PERIODS, 
     VIRTIO_SND_PCM_F_EVT_XRUNS 
 }; 
- 
+
+
 /* supported PCM sample formats */ 
 enum { 
     /* analog formats (width / physical width) */ 
@@ -140,7 +153,8 @@ enum {
     VIRTIO_SND_PCM_FMT_DSD_U32,         /* 32 / 32 bits */ 
     VIRTIO_SND_PCM_FMT_IEC958_SUBFRAME  /* 32 / 32 bits */ 
 }; 
- 
+
+
 /* supported PCM frame rates */ 
 enum { 
     VIRTIO_SND_PCM_RATE_5512 = 0, 
@@ -158,45 +172,80 @@ enum {
     VIRTIO_SND_PCM_RATE_192000, 
     VIRTIO_SND_PCM_RATE_384000 
 }; 
- 
+
+
 struct virtio_snd_pcm_info { 
-    struct virtio_snd_info hdr; 
-    uint32_t features; /* 1 << VIRTIO_SND_PCM_F_XXX */ 
-    uint64_t formats; /* 1 << VIRTIO_SND_PCM_FMT_XXX */ 
-    uint64_t rates; /* 1 << VIRTIO_SND_PCM_RATE_XXX */ 
-    uint8_t direction; 
-    uint8_t channels_min; 
-    uint8_t channels_max; 
- 
-    uint8_t padding[5]; 
+    struct virtio_snd_info  hdr;
+    uint32_t  				features;	/* 1 << VIRTIO_SND_PCM_F_XXX */
+    uint64_t 				formats;	/* 1 << VIRTIO_SND_PCM_FMT_XXX */
+    uint64_t 				rates;		/* 1 << VIRTIO_SND_PCM_RATE_XXX */
+    uint8_t 				direction;
+    uint8_t 				channels_min;
+    uint8_t 				channels_max;
+
+    uint8_t 				padding[5];
 };
 
-struct virtio_snd_pcm_set_params { 
-    struct virtio_snd_pcm_hdr hdr; /* .code = VIRTIO_SND_R_PCM_SET_PARAMS */ 
-    uint32 buffer_bytes; 
-    uint32 period_bytes; 
-    uint32 features; /* 1 << VIRTIO_SND_PCM_F_XXX */ 
-    uint8 channels; 
-    uint8 format; 
-    uint8 rate; 
- 
-    uint8 padding; 
+
+enum {
+    /* The driver negotiates the stream parameters (format, transport, etc) with the device */
+    VIRTIO_SND_STATE_SET_PARAMETERS = 0,
+    /* The device prepares the stream (allocates resources, etc). */
+    VIRTIO_SND_STATE_PREPARE,
+    /* The device starts the stream (unmute, putting into running state, etc). */
+    VIRTIO_SND_STATE_START,
+    /* The device stops the stream (mute, putting into non-running state, etc). */
+    VIRTIO_SND_STATE_STOP,
+    /* The device releases the stream (frees resources, etc). */
+    VIRTIO_SND_STATE_RELEASE
 };
+
+
+struct virtio_snd_pcm_set_params { 
+    struct virtio_snd_pcm_hdr   hdr;			/* .code = VIRTIO_SND_R_PCM_SET_PARAMS */
+    uint32 						buffer_bytes;
+    uint32 						period_bytes;
+    uint32						features;		/* 1 << VIRTIO_SND_PCM_F_XXX */
+    uint8 						channels;
+    uint8 						format;
+    uint8						rate;
+ 
+    uint8						padding;
+};
+
 
 struct virtio_snd_pcm_prepare {
     struct virtio_snd_pcm_hdr hdr;
 };
 
+
+struct virtio_snd_pcm_start {
+    struct virtio_snd_pcm_hdr hdr;
+};
+
+
+struct virtio_snd_pcm_stop {
+    struct virtio_snd_pcm_hdr hdr;
+};
+
+
+struct virtio_snd_pcm_release {
+    struct virtio_snd_pcm_hdr hdr;
+};
+
+
 /* an I/O header */ 
 struct virtio_snd_pcm_xfer { 
     uint32 stream_id; 
 }; 
- 
+
+
 /* an I/O status */ 
 struct virtio_snd_pcm_status { 
     uint32 status; 
     uint32 latency_bytes; 
 };
+
 
 /* standard channel position definition */ 
 enum { 
@@ -238,10 +287,12 @@ enum {
     VIRTIO_SND_CHMAP_BLC,       /* bottom left center */ 
     VIRTIO_SND_CHMAP_BRC        /* bottom right center */ 
 }; 
- 
+
+
 /* maximum possible number of channels */ 
 #define VIRTIO_SND_CHMAP_MAX_SIZE 18
- 
+
+
 struct virtio_snd_chmap_info { 
     struct virtio_snd_info hdr; 
     uint8 direction; 
