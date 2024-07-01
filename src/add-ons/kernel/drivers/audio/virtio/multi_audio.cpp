@@ -10,6 +10,9 @@
 #include "virtio_sound.h"
 #include "driver.h"
 
+#define VIRTIO_MULTI_CONTROL_FIRST_ID	1024
+#define VIRTIO_MULTI_CONTROL_MASTER_ID	0
+
 
 static VirtIOSoundPCMInfo*
 get_stream(VirtIOSoundDriverInfo* info, uint8 direction)
@@ -311,6 +314,43 @@ multi_get_buffers(VirtIOSoundDriverInfo* info, void* buffer)
 }
 
 
+static status_t
+multi_list_mix(VirtIOSoundDriverInfo* info, void* buffer)
+{
+	multi_mix_control_info* data = (multi_mix_control_info*)buffer;
+
+	uint8 idx = 0;
+	for (uint32 i = 0; i < 2; i++) {
+		VirtIOSoundPCMInfo* stream = get_stream(info, i);
+		if (!stream)
+			continue;
+
+		multi_mix_control* controls = &data->controls[idx];
+
+		controls->id = VIRTIO_MULTI_CONTROL_FIRST_ID + idx;
+		controls->parent = 0;
+		controls->flags = B_MULTI_MIX_GROUP;
+		controls->master = VIRTIO_MULTI_CONTROL_MASTER_ID;
+		controls->string = S_null;
+		
+		switch (i) {
+			case VIRTIO_SND_D_OUTPUT:
+				strcpy(controls->name, "Playback");
+				break;
+			case VIRTIO_SND_D_INPUT:
+				strcpy(controls->name, "Record");
+				break;
+		}
+
+		idx++;
+	}
+
+	data->control_count = 2;
+
+	return B_OK;
+}
+
+
 status_t
 virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length)
 {
@@ -332,7 +372,7 @@ virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length)
 		case B_MULTI_GET_MIX:					return B_ERROR;
 		case B_MULTI_SET_MIX:					return B_ERROR;
 		case B_MULTI_LIST_MIX_CHANNELS:			return B_ERROR;
-		case B_MULTI_LIST_MIX_CONTROLS:			return B_ERROR;
+		case B_MULTI_LIST_MIX_CONTROLS:			return multi_list_mix(info, buffer);
 		case B_MULTI_LIST_MIX_CONNECTIONS:		return B_ERROR;
 		case B_MULTI_GET_BUFFERS:				return multi_get_buffers(info, buffer);
 		case B_MULTI_SET_BUFFERS:				return B_ERROR;
