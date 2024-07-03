@@ -16,7 +16,7 @@
 #define LOG(x...)		dprintf("virtio_sound: " x)
 
 #ifdef _VIRTIO_SND_DEBUG
-#define DEBUG(x...)		dprintf("\33[36mvirtio_sound:\33[0m " __func__ ": " x)
+#define DEBUG(x, y...)		dprintf("\33[36mvirtio_sound:\33[0m %s: " x, __func__, y)
 #else
 #define DEBUG(x...)		;
 #endif
