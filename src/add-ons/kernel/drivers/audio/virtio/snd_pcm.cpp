@@ -145,10 +145,10 @@ VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info)
 
 		switch (stream_info[i].direction) {
 			case VIRTIO_SND_D_OUTPUT:
-				info->inputStreams++;
+				info->outputStreams++;
 				break;
 			case VIRTIO_SND_D_INPUT:
-				info->outputStreams++;
+				info->inputStreams++;
 				break;
 			default:
 				ERROR("unknown stream direction (%u)\n", stream_info[i].direction);
@@ -268,8 +268,10 @@ VirtIOSoundPCMSetParams(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream,
 	status_t status = VirtIOSoundPCMControlRequest(info, (void*)&data,
 		sizeof(struct virtio_snd_pcm_set_params));
 
-	if (status != B_OK)
+	if (status != B_OK) {
+		ERROR("PCM control request failed.\n");
 		return status;
+	}
 
 	stream->current_state = VIRTIO_SND_STATE_SET_PARAMETERS;
 

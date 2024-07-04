@@ -41,11 +41,15 @@ VirtIOSoundQueryInfo(VirtIOSoundDriverInfo* info, uint32 type,
             responseSize},
 	};
 
+	acquire_sem(info->ctrlSem);
+
 	status_t status = info->virtio->queue_request_v(info->controlQueue,
 		entries, 1, 2, NULL);
 
-	if (status != B_OK)
+	if (status != B_OK) {
+		DEBUG("%s", "enqueue request failed\n");
 		return status;
+	}
 
 	while (!info->virtio->queue_dequeue(info->controlQueue, NULL, NULL));
 
@@ -61,6 +65,15 @@ VirtIOSoundQueryInfo(VirtIOSoundDriverInfo* info, uint32 type,
 		responseSize);
 
 	return B_OK;
+}
+
+
+static void
+ctrl_queue_done(void* _cookie, void* __cookie)
+{
+	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)__cookie;
+
+	release_sem_etc(info->ctrlSem, 1, B_DO_NOT_RESCHEDULE);
 }
 
 
@@ -86,7 +99,15 @@ VirtIOControlQueueInit(VirtIOSoundDriverInfo* info)
 
 	info->ctrlAddr = entry.address;
 
-	status = info->virtio->queue_setup_interrupt(info->controlQueue, NULL, info);
+	info->ctrlSem = create_sem(1, "virtio_sound ctrl_sem");
+	if (info->ctrlSem < B_OK) {
+		status = info->ctrlSem;
+
+		ERROR("ctrl semaphore creation failed (%s)\n", strerror(status));
+		goto err1;
+	}
+
+	status = info->virtio->queue_setup_interrupt(info->controlQueue, ctrl_queue_done, info);
 	if (status != B_OK) {
 		ERROR("ctrl queue interrupt setup failed (%s)\n", strerror(status));
 		goto err1;
@@ -130,7 +151,7 @@ VirtIOEventQueueInit(VirtIOSoundDriverInfo* info)
 		{info->eventAddr + sizeof(struct virtio_snd_event), sizeof(struct virtio_snd_event)}
 	};
 
-	if (!info->virtio->queue_is_empty(info->controlQueue)) {
+	if (!info->virtio->queue_is_empty(info->eventQueue)) {
 		status = B_ERROR;
 		goto err1;
 	}
@@ -156,20 +177,34 @@ err1:
 status_t
 VirtIOSoundPCMControlRequest(VirtIOSoundDriverInfo* info, void* buffer, size_t size)
 {
-	if (!info->virtio->queue_is_empty(info->controlQueue))
+	if (!info->virtio->queue_is_empty(info->controlQueue)) {
+		DEBUG("%s", "queue is not empty\n");
 		return B_ERROR;
+	}
 
 	memcpy((void*)info->ctrlBuf, buffer, size);
 
 	physical_entry entries[] = {
-		{info->ctrlAddr, size}
+		{info->ctrlAddr, size},
+		{info->ctrlAddr + size, sizeof(struct virtio_snd_hdr)}
 	};
 
-	status_t status = info->virtio->queue_request_v(info->controlQueue, entries, 1, 0, NULL);
-	if (status != B_OK)
+	acquire_sem(info->ctrlSem);
+
+	status_t status = info->virtio->queue_request_v(info->controlQueue, entries, 1, 1, NULL);
+	if (status != B_OK) {
+		DEBUG("%s", "queue request failed\n");
 		return status;
+	}
 
 	while (!info->virtio->queue_dequeue(info->controlQueue, NULL, NULL));
+
+	struct virtio_snd_hdr* hdr = (struct virtio_snd_hdr*)(info->ctrlBuf + size);
+
+	if (hdr->code != VIRTIO_SND_S_OK) {
+		ERROR("control request failed\n");
+		return B_ERROR;
+	}
 
 	return B_OK;
 }
@@ -178,7 +213,7 @@ VirtIOSoundPCMControlRequest(VirtIOSoundDriverInfo* info, void* buffer, size_t s
 status_t
 VirtIOSoundTXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 {
-	uint32 tx_size = sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * 2)
+	uint32 tx_size = sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * BUFFERS)
 		+ sizeof(struct virtio_snd_pcm_status);
 
 	tx_size = ROUND_TO_PAGE_SIZE(tx_size);

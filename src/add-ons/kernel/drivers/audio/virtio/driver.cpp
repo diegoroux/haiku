@@ -149,7 +149,7 @@ virtio_snd_init_device(void* _info, void** cookie)
 	status = info->virtio->setup_interrupt(info->virtioDev, NULL, info);
 	if (status != B_OK) {
 		ERROR("interrupt setup failed (%s)\n", strerror(status));
-		goto err2;
+		goto err1;
 	}
 
 	status = VirtIOControlQueueInit(info);
@@ -198,12 +198,10 @@ virtio_snd_init_device(void* _info, void** cookie)
 		goto err2;
 	}
 
-	if (info->nChmaps) {
-		status = VirtIOSoundQueryChmapsInfo(info);
-		if (status != B_OK) {
-			ERROR("stream info query failed (%s)\n", strerror(status));
-			goto err2;
-		}
+	status = VirtIOSoundQueryChmapsInfo(info);
+	if (status != B_OK) {
+		ERROR("stream info query failed (%s)\n", strerror(status));
+		goto err2;
 	}
 
 	status = VirtIOEventQueueInit(info);

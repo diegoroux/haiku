@@ -70,7 +70,7 @@ multi_get_description(VirtIOSoundDriverInfo* info, void* buffer)
 	desc->interface_version = B_CURRENT_INTERFACE_VERSION;
 	desc->interface_minimum = B_CURRENT_INTERFACE_VERSION;
 
-	strcpy(desc->friendly_name, "VirtIO Sound Device");
+	strcpy(desc->friendly_name, "Virtio Sound Device");
 	strcpy(desc->vendor_info, "Haiku");
 
 	desc->input_channel_count = 0;
@@ -210,10 +210,10 @@ multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 		_multi_format *request;
 		switch (i) {
 			case VIRTIO_SND_D_OUTPUT:
-				request = &data->input;
+				request = &data->output;
 				break;
 			case VIRTIO_SND_D_INPUT:
-				request = &data->output;
+				request = &data->input;
 				break;
 		}
 
@@ -236,8 +236,10 @@ multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 		status_t status = VirtIOSoundPCMSetParams(info, stream,
 			stream->period_size * BUFFERS, stream->period_size);
 
-		if (status != B_OK)
+		if (status != B_OK) {
+			ERROR("set params failed (%s)\n", strerror(status));
 			return status;
+		}
 	}
 
 	return B_OK;
@@ -294,6 +296,9 @@ multi_get_buffers(VirtIOSoundDriverInfo* info, void* buffer)
 		if (status != B_OK)
 			return status;
 
+		// Consider the header size.
+		buf_ptr += sizeof(struct virtio_snd_pcm_xfer);
+
 		uint32 format_size = format_to_size(stream->format);
 
 		for (uint32 buf_id = 0; buf_id < BUFFERS; buf_id++) {
@@ -315,7 +320,14 @@ multi_get_buffers(VirtIOSoundDriverInfo* info, void* buffer)
 
 
 static status_t
-multi_list_mix(VirtIOSoundDriverInfo* info, void* buffer)
+multi_list_mix_channels(VirtIOSoundDriverInfo* info, void* buffer)
+{
+	return B_OK;
+}
+
+
+static status_t
+multi_list_mix_controls(VirtIOSoundDriverInfo* info, void* buffer)
 {
 	multi_mix_control_info* data = (multi_mix_control_info*)buffer;
 
@@ -345,9 +357,27 @@ multi_list_mix(VirtIOSoundDriverInfo* info, void* buffer)
 		idx++;
 	}
 
-	data->control_count = 2;
+	data->control_count = 0;
 
 	return B_OK;
+}
+
+
+status_t
+multi_list_mix_connections(VirtIOSoundDriverInfo* info, void* buffer)
+{
+	multi_mix_connection_info* data = (multi_mix_connection_info*)buffer;
+
+	data->actual_count = 0;
+
+	return B_OK;
+}
+
+
+static status_t
+multi_buffer_exchange(VirtIOSoundDriverInfo* info, void* buffer)
+{
+	return B_ERROR;
 }
 
 
@@ -371,13 +401,13 @@ virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length)
 		case B_MULTI_SET_CHANNEL_FORMATS:		return B_ERROR;
 		case B_MULTI_GET_MIX:					return B_ERROR;
 		case B_MULTI_SET_MIX:					return B_ERROR;
-		case B_MULTI_LIST_MIX_CHANNELS:			return B_ERROR;
-		case B_MULTI_LIST_MIX_CONTROLS:			return multi_list_mix(info, buffer);
-		case B_MULTI_LIST_MIX_CONNECTIONS:		return B_ERROR;
+		case B_MULTI_LIST_MIX_CHANNELS:			return multi_list_mix_channels(info, buffer);
+		case B_MULTI_LIST_MIX_CONTROLS:			return multi_list_mix_controls(info, buffer);
+		case B_MULTI_LIST_MIX_CONNECTIONS:		return multi_list_mix_connections(info, buffer);
 		case B_MULTI_GET_BUFFERS:				return multi_get_buffers(info, buffer);
 		case B_MULTI_SET_BUFFERS:				return B_ERROR;
 		case B_MULTI_SET_START_TIME:			return B_ERROR;
-		case B_MULTI_BUFFER_EXCHANGE:			return B_ERROR;
+		case B_MULTI_BUFFER_EXCHANGE:			return multi_buffer_exchange(info, buffer);
 		case B_MULTI_BUFFER_FORCE_STOP:			return B_ERROR;
 		case B_MULTI_LIST_EXTENSIONS:			return B_ERROR;
 		case B_MULTI_GET_EXTENSION:				return B_ERROR;

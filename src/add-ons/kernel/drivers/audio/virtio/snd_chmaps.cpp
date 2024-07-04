@@ -90,10 +90,29 @@ chmap_to_multi(struct virtio_snd_chmap_info info, VirtIOSoundPCMInfo* stream)
 }
 
 
+static void
+set_default_chmaps(VirtIOSoundDriverInfo* info)
+{
+    for (uint32 id = 0; id < info->nStreams; id++) {
+        VirtIOSoundPCMInfo* stream = &info->streams[id];
+
+        stream->channels = 2;
+
+        stream->chmap[0] = B_CHANNEL_LEFT;
+        stream->chmap[1] = B_CHANNEL_RIGHT;
+    }
+}
+
+
 status_t
 VirtIOSoundQueryChmapsInfo(VirtIOSoundDriverInfo* info)
 {
-	struct virtio_snd_chmap_info chmap_info[info->nChmaps];
+    set_default_chmaps(info);
+
+    if (!info->nChmaps)
+        return B_OK;
+    
+    struct virtio_snd_chmap_info chmap_info[info->nChmaps];
 
 	status_t status = VirtIOSoundQueryInfo(info, VIRTIO_SND_R_CHMAP_INFO, 0,
 		info->nChmaps, sizeof(struct virtio_snd_chmap_info), (void*)chmap_info);

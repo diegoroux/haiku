@@ -76,6 +76,7 @@ struct VirtIOSoundDriverInfo {
 	area_id						ctrlArea;
 	addr_t						ctrlBuf;
 	phys_addr_t					ctrlAddr;
+	sem_id 						ctrlSem;
 
 	area_id						eventArea;
 	addr_t						eventBuf;
