@@ -128,14 +128,12 @@ multi_get_enabled_channels(VirtIOSoundDriverInfo* info, void* buffer)
 {
 	multi_channel_enable* data = (multi_channel_enable*)buffer;
 	uint32 channels = 0;
-	
-	if (info->inputStreams) {
-		VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_INPUT);
-		channels += stream->channels;
-	}
-	
-	if (info->outputStreams) {
-		VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_OUTPUT);
+
+	for (uint32 i = 0; i < 2; i++) {
+		VirtIOSoundPCMInfo* stream = get_stream(info, i);
+		if (!stream)
+			continue;
+
 		channels += stream->channels;
 	}
 
@@ -157,18 +155,23 @@ multi_get_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 
 	data->info_size = sizeof(multi_format_info);
 
-	if (info->inputStreams) {
-		VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_INPUT);
+	for (uint32 i = 0; i < 2; i++) {
+		VirtIOSoundPCMInfo* stream = get_stream(info, i);
+		if (!stream)
+			continue;
 
-		data->input.format = stream->format;
-		data->input.rate = stream->rate;
-	}
-	
-	if (info->outputStreams) {
-		VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_OUTPUT);
+		_multi_format* reply;
+		switch (i) {
+			case VIRTIO_SND_D_OUTPUT:
+				reply = &data->output;
+				break;
+			case VIRTIO_SND_D_INPUT:
+				reply = &data->input;
+				break;
+		}
 
-		data->output.format = stream->format;
-		data->output.rate = stream->rate;
+		reply->format = stream->format;
+		reply->rate = stream->rate;
 	}
 
 	return B_OK;
@@ -207,7 +210,7 @@ multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 		if (!stream)
 			continue;
 
-		_multi_format *request;
+		_multi_format* request;
 		switch (i) {
 			case VIRTIO_SND_D_OUTPUT:
 				request = &data->output;
@@ -232,6 +235,9 @@ multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 
 		stream->period_size = stream->channels * format_to_size(stream->format)
 			* FRAMES_PER_BUFFER;
+
+		if (stream->current_state == VIRTIO_SND_STATE_STOP)
+			VirtIOSoundPCMRelease(info, stream);
 
 		status_t status = VirtIOSoundPCMSetParams(info, stream,
 			stream->period_size * BUFFERS, stream->period_size);
@@ -375,9 +381,131 @@ multi_list_mix_connections(VirtIOSoundDriverInfo* info, void* buffer)
 
 
 static status_t
+start_playback_stream(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
+{
+	status_t status = VirtIOSoundPCMStart(info, stream);
+	if (status != B_OK)
+		return status;
+
+	stream->buffer_cycle = 0;
+	stream->real_time = 0;
+	stream->frames_count = 0;
+
+	stream->entries[0].address = info->txAddr;
+	stream->entries[0].size = sizeof(struct virtio_snd_pcm_xfer);
+
+	struct virtio_snd_pcm_xfer* xfer = (struct virtio_snd_pcm_xfer*)info->txBuf;
+
+	xfer->stream_id = stream->stream_id;
+
+	for (uint8 buf_id = 0; buf_id < BUFFERS; buf_id++) {
+		stream->entries[1 + buf_id].address = info->txAddr + sizeof(struct virtio_snd_pcm_xfer)
+			+ (stream->period_size * buf_id);
+
+		stream->entries[1 + buf_id].size = stream->period_size;
+	}
+
+	stream->entries[BUFFERS + 1].address = info->txAddr + sizeof(struct virtio_snd_pcm_xfer)
+		+ (stream->period_size * BUFFERS);
+	stream->entries[BUFFERS + 1].size = sizeof(struct virtio_snd_pcm_status);
+
+	return B_OK;
+}
+
+
+static status_t
+send_playback_buffer(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
+{
+	if (!info->virtio->queue_is_empty(info->txQueue)) {
+		DEBUG("%s", "queue is not empty\n");
+		return B_ERROR;
+	}
+
+	if (stream->buffer_cycle != (BUFFERS - 1)) {
+		stream->buffer_cycle = (stream->buffer_cycle + 1) % BUFFERS;
+		stream->real_time = system_time();
+		stream->frames_count += FRAMES_PER_BUFFER;
+
+		release_sem_etc(info->txSem, 1, B_DO_NOT_RESCHEDULE);
+
+		return B_OK;
+	}
+
+	status_t status = info->virtio->queue_request_v(info->txQueue, stream->entries,
+		BUFFERS + 1, 1, NULL);
+
+	if (status != B_OK) {
+		DEBUG("%s", "queue request failed\n");
+		return status;
+	}
+
+	while (!info->virtio->queue_dequeue(info->txQueue, NULL, NULL));
+
+	struct virtio_snd_pcm_status* hdr = (struct virtio_snd_pcm_status*)(info->txBuf
+		+ sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * BUFFERS));
+
+	if (hdr->status != VIRTIO_SND_S_OK)
+		return B_ERROR;
+
+	stream->buffer_cycle = (stream->buffer_cycle + 1) % BUFFERS;
+	stream->real_time = system_time();
+	stream->frames_count += FRAMES_PER_BUFFER;
+
+	return B_OK;
+}
+
+
+static status_t
 multi_buffer_exchange(VirtIOSoundDriverInfo* info, void* buffer)
 {
-	return B_ERROR;
+	multi_buffer_info* data = (multi_buffer_info*)buffer;
+
+	VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_OUTPUT);
+	if (!stream)
+		return B_ERROR;
+
+	if (stream->current_state != VIRTIO_SND_STATE_START)
+		return start_playback_stream(info, stream);
+
+	acquire_sem(info->txSem);
+	
+	status_t status = send_playback_buffer(info, stream);
+	if (status != B_OK) {
+		ERROR("playback failed (%s)\n", strerror(status));
+		return status;
+	}
+
+	data->playback_buffer_cycle = stream->buffer_cycle;
+	data->played_real_time = stream->real_time;
+	data->played_frames_count = stream->frames_count;
+
+	return B_OK;
+}
+
+
+static status_t
+multi_buffer_stop(VirtIOSoundDriverInfo* info)
+{
+	VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_OUTPUT);
+	if (!stream)
+		return B_ERROR;
+
+	if (stream->current_state == VIRTIO_SND_STATE_START) {
+		status_t status = VirtIOSoundPCMStop(info, get_stream(info, VIRTIO_SND_D_OUTPUT));
+
+		if (status != B_OK)
+			return status;
+	}
+
+	delete_area(info->txArea);
+	delete_area(info->rxArea);
+
+	info->txBuf = (addr_t)NULL;
+	info->rxBuf = (addr_t)NULL;
+
+	delete_sem(info->txSem);
+
+	return B_OK;
 }
 
 
@@ -385,8 +513,6 @@ status_t
 virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length)
 {
 	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)cookie;
-
-	DEBUG("op: %u\n", op);
 
 	switch (op) {
 		case B_MULTI_GET_DESCRIPTION: 			return multi_get_description(info, buffer);
@@ -408,7 +534,7 @@ virtio_snd_ctrl(void* cookie, uint32 op, void* buffer, size_t length)
 		case B_MULTI_SET_BUFFERS:				return B_ERROR;
 		case B_MULTI_SET_START_TIME:			return B_ERROR;
 		case B_MULTI_BUFFER_EXCHANGE:			return multi_buffer_exchange(info, buffer);
-		case B_MULTI_BUFFER_FORCE_STOP:			return B_ERROR;
+		case B_MULTI_BUFFER_FORCE_STOP:			return multi_buffer_stop(info);
 		case B_MULTI_LIST_EXTENSIONS:			return B_ERROR;
 		case B_MULTI_GET_EXTENSION:				return B_ERROR;
 		case B_MULTI_SET_EXTENSION:				return B_ERROR;

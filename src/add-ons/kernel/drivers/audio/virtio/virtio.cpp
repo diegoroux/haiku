@@ -43,9 +43,7 @@ VirtIOSoundQueryInfo(VirtIOSoundDriverInfo* info, uint32 type,
 
 	acquire_sem(info->ctrlSem);
 
-	status_t status = info->virtio->queue_request_v(info->controlQueue,
-		entries, 1, 2, NULL);
-
+	status_t status = info->virtio->queue_request_v(info->controlQueue, entries, 1, 2, NULL);
 	if (status != B_OK) {
 		DEBUG("%s", "enqueue request failed\n");
 		return status;
@@ -65,15 +63,6 @@ VirtIOSoundQueryInfo(VirtIOSoundDriverInfo* info, uint32 type,
 		responseSize);
 
 	return B_OK;
-}
-
-
-static void
-ctrl_queue_done(void* _cookie, void* __cookie)
-{
-	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)__cookie;
-
-	release_sem_etc(info->ctrlSem, 1, B_DO_NOT_RESCHEDULE);
 }
 
 
@@ -104,12 +93,6 @@ VirtIOControlQueueInit(VirtIOSoundDriverInfo* info)
 		status = info->ctrlSem;
 
 		ERROR("ctrl semaphore creation failed (%s)\n", strerror(status));
-		goto err1;
-	}
-
-	status = info->virtio->queue_setup_interrupt(info->controlQueue, ctrl_queue_done, info);
-	if (status != B_OK) {
-		ERROR("ctrl queue interrupt setup failed (%s)\n", strerror(status));
 		goto err1;
 	}
 
@@ -160,12 +143,6 @@ VirtIOEventQueueInit(VirtIOSoundDriverInfo* info)
 	if (status != B_OK)
 		goto err1;
 
-	status = info->virtio->queue_setup_interrupt(info->eventQueue, NULL, info);
-	if (status != B_OK) {
-		ERROR("event queue interrupt setup failed (%s)\n", strerror(status));
-		goto err1;
-	}
-
 	return B_OK;
 
 err1:
@@ -213,6 +190,14 @@ VirtIOSoundPCMControlRequest(VirtIOSoundDriverInfo* info, void* buffer, size_t s
 status_t
 VirtIOSoundTXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 {
+	if ((void*)info->txBuf != NULL) {
+		// Dealloc any previous created area.
+		area_id prev_id = area_for((void*)info->txBuf);
+
+		if (prev_id != B_ERROR)
+			delete_area(prev_id);
+	}
+
 	uint32 tx_size = sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * BUFFERS)
 		+ sizeof(struct virtio_snd_pcm_status);
 
@@ -237,6 +222,14 @@ VirtIOSoundTXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 
 	info->txAddr = entry.address;
 
+	info->txSem = create_sem(1, "virtio_sound tx_sem");
+	if (info->txSem < B_OK) {
+		status = info->txSem;
+
+		ERROR("tx semaphore creation failed (%s)\n", strerror(status));
+		goto err1;
+	}
+
 	return B_OK;
 
 err1:
@@ -248,13 +241,21 @@ err1:
 status_t
 VirtIOSoundRXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 {
+	if ((void*)info->rxBuf != NULL) {
+		// Dealloc any previous created area.
+		area_id prev_id = area_for((void*)info->rxBuf);
+
+		if (prev_id != B_ERROR)
+			delete_area(prev_id);
+	}
+
 	uint32 rx_size = sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * BUFFERS)
 		+ sizeof(struct virtio_snd_pcm_status);
 
 	rx_size = ROUND_TO_PAGE_SIZE(rx_size);
 
 	info->rxArea = create_area("virtio_snd rx buffer", (void**)&info->rxBuf,
-		B_ANY_KERNEL_BLOCK_ADDRESS, rx_size, B_FULL_LOCK,
+		B_ANY_KERNEL_BLOCK_ADDRESS, rx_size, B_CONTIGUOUS,
 		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
 
 	status_t status = info->rxArea;
@@ -271,12 +272,6 @@ VirtIOSoundRXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 	}
 
 	info->rxAddr = entry.address;
-
-	status = info->virtio->queue_setup_interrupt(info->rxQueue, NULL, info);
-	if (status != B_OK) {
-		ERROR("rx queue interrupt setup failed (%s)\n", strerror(status));
-		goto err1;
-	}
 
 	return B_OK;
 

@@ -5,7 +5,6 @@
 #ifndef _VIRTIO_SND_DRIVER_H
 #define _VIRTIO_SND_DRIVER_H
 
-
 #include <fs/devfs.h>
 
 #include <stdlib.h>
@@ -49,6 +48,12 @@ struct VirtIOSoundPCMInfo {
 	uint8						channels_min;
 	uint8						channels_max;
 
+	uint32						buffer_cycle;
+	uint32						real_time;
+	uint32						frames_count;
+
+	physical_entry				entries[BUFFERS + 2];
+
 	uint8						chmap[VIRTIO_SND_CHMAP_MAX_SIZE];
 };
 
@@ -57,6 +62,8 @@ struct VirtIOSoundDriverInfo {
 	device_node* 				node;
 	::virtio_device 			virtioDev;
 	virtio_device_interface*	virtio;
+
+	bool						opened;
 
 	uint64						features;
 
@@ -85,7 +92,7 @@ struct VirtIOSoundDriverInfo {
 	area_id						txArea;
 	addr_t						txBuf;
 	phys_addr_t					txAddr;
-	spinlock					txLock;
+	sem_id						txSem;
 
 	area_id						rxArea;
 	addr_t						rxBuf;
@@ -120,6 +127,15 @@ VirtIOSoundPCMSetParams(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream,
 
 status_t
 VirtIOSoundPCMPrepare(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream);
+
+status_t
+VirtIOSoundPCMStart(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream);
+
+status_t
+VirtIOSoundPCMStop(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream);
+
+status_t
+VirtIOSoundPCMRelease(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream);
 
 status_t
 VirtIOSoundTXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream);

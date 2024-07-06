@@ -119,6 +119,24 @@ virtio_snd_uninit_driver(void* cookie)
 // #pragma mark - Device module API
 
 
+static void
+ctrl_queue_done(void* _cookie, void* __cookie)
+{
+	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)__cookie;
+
+	release_sem_etc(info->ctrlSem, 1, B_DO_NOT_RESCHEDULE);
+}
+
+
+static void
+tx_queue_done(void* _cookie, void* __cookie)
+{
+	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)__cookie;
+
+	release_sem_etc(info->txSem, 1, B_DO_NOT_RESCHEDULE);
+}
+
+
 static status_t
 virtio_snd_init_device(void* _info, void** cookie)
 {
@@ -149,6 +167,25 @@ virtio_snd_init_device(void* _info, void** cookie)
 	status = info->virtio->setup_interrupt(info->virtioDev, NULL, info);
 	if (status != B_OK) {
 		ERROR("interrupt setup failed (%s)\n", strerror(status));
+		goto err1;
+	}
+
+	status = info->virtio->queue_setup_interrupt(info->controlQueue,
+		ctrl_queue_done, info);
+	if (status != B_OK) {
+		ERROR("ctrl queue interrupt setup failed (%s)\n", strerror(status));
+		goto err1;
+	}
+
+	status = info->virtio->queue_setup_interrupt(info->txQueue, tx_queue_done, info);
+	if (status != B_OK) {
+		ERROR("tx queue interrupt setup failed (%s)\n", strerror(status));
+		goto err1;
+	}
+
+	status = info->virtio->queue_setup_interrupt(info->eventQueue, NULL, info);
+	if (status != B_OK) {
+		ERROR("event queue interrupt setup failed (%s)\n", strerror(status));
 		goto err1;
 	}
 
@@ -238,7 +275,12 @@ static status_t
 virtio_snd_open(void *deviceCookie, const char *path, int openMode,
 	void **_cookie)
 {
-	// VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*) cookie;
+	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)deviceCookie;
+
+	if (info->opened)
+		return B_BUSY;
+
+	info->opened = true;
 
 	*_cookie = deviceCookie;
 	return B_OK;
@@ -248,6 +290,12 @@ virtio_snd_open(void *deviceCookie, const char *path, int openMode,
 static status_t
 virtio_snd_close(void* cookie)
 {
+	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)cookie;
+
+	info->opened = false;
+
+	delete_sem(info->txSem);
+
 	return B_OK;
 }
 
