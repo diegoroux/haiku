@@ -255,8 +255,8 @@ VirtIOSoundRXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 	rx_size = ROUND_TO_PAGE_SIZE(rx_size);
 
 	info->rxArea = create_area("virtio_snd rx buffer", (void**)&info->rxBuf,
-		B_ANY_KERNEL_BLOCK_ADDRESS, rx_size, B_CONTIGUOUS,
-		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+		B_ANY_KERNEL_ADDRESS, rx_size, B_CONTIGUOUS,
+		B_READ_AREA | B_WRITE_AREA);
 
 	status_t status = info->rxArea;
 	if (status < 0) {

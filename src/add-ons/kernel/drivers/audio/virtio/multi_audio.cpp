@@ -131,7 +131,7 @@ multi_get_enabled_channels(VirtIOSoundDriverInfo* info, void* buffer)
 
 	for (uint32 i = 0; i < 2; i++) {
 		VirtIOSoundPCMInfo* stream = get_stream(info, i);
-		if (!stream)
+		if (stream == NULL)
 			continue;
 
 		channels += stream->channels;
@@ -157,7 +157,7 @@ multi_get_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 
 	for (uint32 i = 0; i < 2; i++) {
 		VirtIOSoundPCMInfo* stream = get_stream(info, i);
-		if (!stream)
+		if (stream == NULL)
 			continue;
 
 		_multi_format* reply;
@@ -207,7 +207,7 @@ multi_set_global_format(VirtIOSoundDriverInfo* info, void* buffer)
 
 	for (uint32 i = 0; i < 2; i++) {
 		VirtIOSoundPCMInfo* stream = get_stream(info, i);
-		if (!stream)
+		if (stream == NULL)
 			continue;
 
 		_multi_format* request;
@@ -261,7 +261,7 @@ multi_get_buffers(VirtIOSoundDriverInfo* info, void* buffer)
 
 	for (uint32 i = 0; i < 2; i++) {
 		VirtIOSoundPCMInfo* stream = get_stream(info, i);
-		if (!stream)
+		if (stream == NULL)
 			continue;
 
 		buffer_desc** buffers;
@@ -340,7 +340,7 @@ multi_list_mix_controls(VirtIOSoundDriverInfo* info, void* buffer)
 	uint8 idx = 0;
 	for (uint32 i = 0; i < 2; i++) {
 		VirtIOSoundPCMInfo* stream = get_stream(info, i);
-		if (!stream)
+		if (stream == NULL)
 			continue;
 
 		multi_mix_control* controls = &data->controls[idx];
@@ -461,7 +461,7 @@ multi_buffer_exchange(VirtIOSoundDriverInfo* info, void* buffer)
 	multi_buffer_info* data = (multi_buffer_info*)buffer;
 
 	VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_OUTPUT);
-	if (!stream)
+	if (stream == NULL)
 		return B_ERROR;
 
 	if (stream->current_state != VIRTIO_SND_STATE_START)
@@ -487,7 +487,7 @@ static status_t
 multi_buffer_stop(VirtIOSoundDriverInfo* info)
 {
 	VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_OUTPUT);
-	if (!stream)
+	if (stream == NULL)
 		return B_ERROR;
 
 	if (stream->current_state == VIRTIO_SND_STATE_START) {
