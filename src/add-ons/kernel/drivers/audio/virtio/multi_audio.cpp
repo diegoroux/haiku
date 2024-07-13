@@ -67,15 +67,20 @@ create_multi_channel_info(VirtIOSoundDriverInfo* info, multi_channel_info* chann
 static status_t
 get_description(VirtIOSoundDriverInfo* info, multi_description* desc)
 {
-	memset((void*)desc, 0x00, sizeof(multi_description));
-
-	desc->info_size = sizeof(multi_description);
-
 	desc->interface_version = B_CURRENT_INTERFACE_VERSION;
 	desc->interface_minimum = B_CURRENT_INTERFACE_VERSION;
 
 	strcpy(desc->friendly_name, "Virtio Sound Device");
 	strcpy(desc->vendor_info, "Haiku");
+
+	desc->input_channel_count = 0;
+	desc->output_channel_count = 0;
+
+	desc->output_bus_channel_count = 0;
+	desc->input_bus_channel_count = 0;
+	desc->aux_bus_channel_count = 0;
+
+	desc->interface_flags = 0x00;
 
 	for (uint32 i = 0; i < 2; i++) {
 		VirtIOSoundPCMInfo* stream = get_stream(info, i);
@@ -107,7 +112,15 @@ get_description(VirtIOSoundDriverInfo* info, multi_description* desc)
 		create_multi_channel_info(info, desc->channels);
 	}
 
+	desc->max_cvsr_rate = 0;
+	desc->min_cvsr_rate = 0;
+
 	desc->lock_sources = B_MULTI_LOCK_INTERNAL;
+	desc->timecode_sources = 0;
+
+	desc->start_latency = 0;
+
+	desc->control_panel[0] = '\0';
 
 	return B_OK;
 }
@@ -225,7 +238,7 @@ set_global_format(VirtIOSoundDriverInfo* info, multi_format_info* data)
 			VirtIOSoundPCMRelease(info, stream);
 
 		status_t status = VirtIOSoundPCMSetParams(info, stream,
-			stream->period_size * BUFFERS, stream->period_size);
+			stream->period_size, stream->period_size);
 
 		if (status != B_OK) {
 			ERROR("set params failed (%s)\n", strerror(status));
@@ -356,10 +369,21 @@ get_buffers(VirtIOSoundDriverInfo* info, multi_buffer_list* data)
 		uint32 format_size = format_to_size(stream->format);
 
 		for (uint32 buf_id = 0; buf_id < BUFFERS; buf_id++) {
+			if (!IS_USER_ADDRESS(buffers[buf_id]))
+				return B_BAD_ADDRESS;
+
+			struct buffer_desc buf_desc[stream->channels];
+
 			for (uint32 ch_id = 0; ch_id < stream->channels; ch_id++) {
-				buffers[buf_id][ch_id].base = buf_ptr + (format_size * ch_id);
-				buffers[buf_id][ch_id].stride = format_size * stream->channels;
+				buf_desc[ch_id].base = buf_ptr + (format_size * ch_id);
+				buf_desc[ch_id].stride = format_size * stream->channels;
 			}
+
+			status = user_memcpy(buffers[buf_id], buf_desc,
+				sizeof(struct buffer_desc) * stream->channels);
+
+			if (status < B_OK)
+				return B_BAD_ADDRESS;
 
 			buf_ptr += stream->period_size;
 		}
@@ -387,20 +411,18 @@ start_playback_stream(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 	stream->entries[0].address = info->txAddr;
 	stream->entries[0].size = sizeof(struct virtio_snd_pcm_xfer);
 
-	struct virtio_snd_pcm_xfer* xfer = (struct virtio_snd_pcm_xfer*)info->txBuf;
+	struct virtio_snd_pcm_xfer xfer;
+	xfer.stream_id = stream->stream_id;
 
-	xfer->stream_id = stream->stream_id;
+	status = user_memcpy((void*)info->txBuf, (void*)&xfer, sizeof(struct virtio_snd_pcm_xfer));
+	if (status < B_OK)
+		return status;
 
-	for (uint8 buf_id = 0; buf_id < BUFFERS; buf_id++) {
-		stream->entries[1 + buf_id].address = info->txAddr + sizeof(struct virtio_snd_pcm_xfer)
-			+ (stream->period_size * buf_id);
+	stream->entries[1].size = stream->period_size;
 
-		stream->entries[1 + buf_id].size = stream->period_size;
-	}
-
-	stream->entries[BUFFERS + 1].address = info->txAddr + sizeof(struct virtio_snd_pcm_xfer)
+	stream->entries[2].address = info->txAddr + sizeof(struct virtio_snd_pcm_xfer)
 		+ (stream->period_size * BUFFERS);
-	stream->entries[BUFFERS + 1].size = sizeof(struct virtio_snd_pcm_status);
+	stream->entries[2].size = sizeof(struct virtio_snd_pcm_status);
 
 	return B_OK;
 }
@@ -414,18 +436,11 @@ send_playback_buffer(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 		return B_ERROR;
 	}
 
-	if (stream->buffer_cycle != (BUFFERS - 1)) {
-		stream->buffer_cycle = (stream->buffer_cycle + 1) % BUFFERS;
-		stream->real_time = system_time();
-		stream->frames_count += FRAMES_PER_BUFFER;
-
-		release_sem_etc(info->txSem, 1, B_DO_NOT_RESCHEDULE);
-
-		return B_OK;
-	}
+	stream->entries[1].address = info->txAddr + sizeof(struct virtio_snd_pcm_xfer)
+		+ (stream->period_size * stream->buffer_cycle);
 
 	status_t status = info->virtio->queue_request_v(info->txQueue, stream->entries,
-		BUFFERS + 1, 1, NULL);
+		2, 1, NULL);
 
 	if (status != B_OK) {
 		DEBUG("%s", "queue request failed\n");
@@ -434,10 +449,16 @@ send_playback_buffer(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 
 	while (!info->virtio->queue_dequeue(info->txQueue, NULL, NULL));
 
-	struct virtio_snd_pcm_status* hdr = (struct virtio_snd_pcm_status*)(info->txBuf
-		+ sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * BUFFERS));
+	struct virtio_snd_pcm_status hdr;
+	status = user_memcpy(&hdr,
+		(void*)(info->txBuf + sizeof(struct virtio_snd_pcm_xfer)
+			+ (stream->period_size * BUFFERS)),
+		sizeof(struct virtio_snd_pcm_status));
 
-	if (hdr->status != VIRTIO_SND_S_OK)
+	if (status < B_OK)
+		return status;
+
+	if (hdr.status != VIRTIO_SND_S_OK)
 		return B_ERROR;
 
 	stream->buffer_cycle = (stream->buffer_cycle + 1) % BUFFERS;
@@ -458,17 +479,30 @@ buffer_exchange(VirtIOSoundDriverInfo* info, multi_buffer_info* data)
 	if (stream->current_state != VIRTIO_SND_STATE_START)
 		return start_playback_stream(info, stream);
 
+	if (!IS_USER_ADDRESS(data))
+		return B_BAD_ADDRESS;
+
+	multi_buffer_info buf_info;
+
+	status_t status = user_memcpy(&buf_info, data, sizeof(multi_buffer_info));
+	if (status < B_OK)
+		return B_BAD_ADDRESS;
+
 	acquire_sem(info->txSem);
 	
-	status_t status = send_playback_buffer(info, stream);
+	status = send_playback_buffer(info, stream);
 	if (status != B_OK) {
 		ERROR("playback failed (%s)\n", strerror(status));
 		return status;
 	}
 
-	data->playback_buffer_cycle = stream->buffer_cycle;
-	data->played_real_time = stream->real_time;
-	data->played_frames_count = stream->frames_count;
+	buf_info.playback_buffer_cycle = stream->buffer_cycle;
+	buf_info.played_real_time = stream->real_time;
+	buf_info.played_frames_count = stream->frames_count;
+
+	status = user_memcpy(data, &buf_info, sizeof(multi_buffer_info));
+	if (status < B_OK)
+		return B_BAD_ADDRESS;
 
 	return B_OK;
 }

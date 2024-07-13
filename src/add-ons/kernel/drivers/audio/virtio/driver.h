@@ -52,7 +52,7 @@ struct VirtIOSoundPCMInfo {
 	uint32						real_time;
 	uint32						frames_count;
 
-	physical_entry				entries[BUFFERS + 2];
+	physical_entry				entries[3];
 
 	uint8						chmap[VIRTIO_SND_CHMAP_MAX_SIZE];
 };

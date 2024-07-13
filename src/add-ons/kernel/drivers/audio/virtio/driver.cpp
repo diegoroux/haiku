@@ -294,8 +294,6 @@ virtio_snd_close(void* cookie)
 
 	info->opened = false;
 
-	delete_sem(info->txSem);
-
 	return B_OK;
 }
 
