@@ -137,6 +137,15 @@ tx_queue_done(void* _cookie, void* __cookie)
 }
 
 
+static void
+rx_queue_done(void* _cookie, void* __cookie)
+{
+	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)__cookie;
+
+	release_sem_etc(info->rxSem, 1, B_DO_NOT_RESCHEDULE);
+}
+
+
 static status_t
 virtio_snd_init_device(void* _info, void** cookie)
 {
@@ -180,6 +189,12 @@ virtio_snd_init_device(void* _info, void** cookie)
 	status = info->virtio->queue_setup_interrupt(info->txQueue, tx_queue_done, info);
 	if (status != B_OK) {
 		ERROR("tx queue interrupt setup failed (%s)\n", strerror(status));
+		goto err1;
+	}
+
+	status = info->virtio->queue_setup_interrupt(info->rxQueue, rx_queue_done, info);
+	if (status != B_OK) {
+		ERROR("rx queue interrupt setup failed (%s)\n", strerror(status));
 		goto err1;
 	}
 
@@ -271,6 +286,7 @@ virtio_snd_uninit_device(void *_info)
 	return;
 }
 
+
 static status_t
 virtio_snd_open(void *deviceCookie, const char *path, int openMode,
 	void **_cookie)
@@ -284,6 +300,22 @@ virtio_snd_open(void *deviceCookie, const char *path, int openMode,
 
 	*_cookie = deviceCookie;
 	return B_OK;
+}
+
+
+static status_t
+virtio_snd_read(void *cookie, off_t pos, void *buffer, size_t *_length)
+{
+	*_length = 0;
+	return B_IO_ERROR;
+}
+
+
+static status_t
+virtio_snd_write(void *cookie, off_t pos, const void *buffer, size_t *_length)
+{
+	*_length = 0;
+	return B_IO_ERROR;
 }
 
 
@@ -336,6 +368,9 @@ struct device_module_info sVirtioSoundDevice = {
 	.close = virtio_snd_close,
 
 	.free = virtio_snd_free_dev,
+
+	.read = virtio_snd_read,
+	.write = virtio_snd_write,
 
 	.control = virtio_snd_ctrl,
 };

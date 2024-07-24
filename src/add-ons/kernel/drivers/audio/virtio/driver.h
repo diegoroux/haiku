@@ -22,7 +22,7 @@
 
 #define VIRTIO_SND_CHMAP_MAX_SIZE	18
 
-#define FRAMES_PER_BUFFER	1024
+#define FRAMES_PER_BUFFER	(1024 * 16)
 #define BUFFERS				2
 
 
@@ -37,6 +37,7 @@ struct VirtIOSoundPCMInfo {
 
 	uint32						format;
 	uint32						rate;
+	uint32						cvsr;
 
 	uint32 						period_size;
 
@@ -52,9 +53,12 @@ struct VirtIOSoundPCMInfo {
 	uint32						real_time;
 	uint32						frames_count;
 
-	physical_entry				entries[3];
-
 	uint8						chmap[VIRTIO_SND_CHMAP_MAX_SIZE];
+
+	area_id						xferArea;
+	addr_t						xferBuf;
+	phys_addr_t					xferAddr;
+	spinlock					xferLock;
 };
 
 
@@ -93,10 +97,13 @@ struct VirtIOSoundDriverInfo {
 	addr_t						txBuf;
 	phys_addr_t					txAddr;
 	sem_id						txSem;
+	thread_id					txThread;
 
 	area_id						rxArea;
 	addr_t						rxBuf;
 	phys_addr_t					rxAddr;
+	sem_id						rxSem;
+	thread_id					rxThread;
 };
 
 status_t

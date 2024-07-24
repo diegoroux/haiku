@@ -198,10 +198,7 @@ VirtIOSoundTXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 			delete_area(prev_id);
 	}
 
-	uint32 tx_size = sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * BUFFERS)
-		+ sizeof(struct virtio_snd_pcm_status);
-
-	tx_size = ROUND_TO_PAGE_SIZE(tx_size);
+	uint32 tx_size = ROUND_TO_PAGE_SIZE(stream->period_size * BUFFERS);
 
 	info->txArea = create_area("virtio_snd tx buffer", (void**)&info->txBuf,
 		B_ANY_KERNEL_ADDRESS, tx_size, B_CONTIGUOUS,
@@ -249,10 +246,7 @@ VirtIOSoundRXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 			delete_area(prev_id);
 	}
 
-	uint32 rx_size = sizeof(struct virtio_snd_pcm_xfer) + (stream->period_size * BUFFERS)
-		+ sizeof(struct virtio_snd_pcm_status);
-
-	rx_size = ROUND_TO_PAGE_SIZE(rx_size);
+	uint32 rx_size = ROUND_TO_PAGE_SIZE(stream->period_size * BUFFERS);
 
 	info->rxArea = create_area("virtio_snd rx buffer", (void**)&info->rxBuf,
 		B_ANY_KERNEL_ADDRESS, rx_size, B_CONTIGUOUS,
