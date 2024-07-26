@@ -58,7 +58,6 @@ struct VirtIOSoundPCMInfo {
 	area_id						xferArea;
 	addr_t						xferBuf;
 	phys_addr_t					xferAddr;
-	spinlock					xferLock;
 };
 
 
@@ -97,13 +96,11 @@ struct VirtIOSoundDriverInfo {
 	addr_t						txBuf;
 	phys_addr_t					txAddr;
 	sem_id						txSem;
-	thread_id					txThread;
 
 	area_id						rxArea;
 	addr_t						rxBuf;
 	phys_addr_t					rxAddr;
 	sem_id						rxSem;
-	thread_id					rxThread;
 };
 
 status_t

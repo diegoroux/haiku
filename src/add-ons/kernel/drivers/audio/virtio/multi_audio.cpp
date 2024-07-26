@@ -295,6 +295,9 @@ set_global_format(VirtIOSoundDriverInfo* info, multi_format_info* data)
 		stream->period_size = stream->channels * format_to_size(stream->format)
 			* FRAMES_PER_BUFFER;
 
+		if (stream->current_state == VIRTIO_SND_STATE_START)
+			VirtIOSoundPCMStop(info, stream);
+
 		if (stream->current_state == VIRTIO_SND_STATE_STOP)
 			VirtIOSoundPCMRelease(info, stream);
 
@@ -454,135 +457,7 @@ get_buffers(VirtIOSoundDriverInfo* info, multi_buffer_list* data)
 
 
 static status_t
-playback_thread(VirtIOSoundDriverInfo* info)
-{
-	VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_OUTPUT);
-	if (stream == NULL)
-		return B_ERROR;
-
-	while (stream->current_state == VIRTIO_SND_STATE_START) {
-		acquire_sem(info->txSem);
-
-		if (!info->virtio->queue_is_empty(info->txQueue)) {
-			DEBUG("%s", "queue is not empty\n");
-			return B_ERROR;
-		}
-
-		physical_entry entries[3];
-
-		entries[0].address = stream->xferAddr + (sizeof(struct virtio_snd_pcm_xfer) +
-			sizeof(struct virtio_snd_pcm_status)) * stream->buffer_cycle;
-		entries[0].size = sizeof(struct virtio_snd_pcm_xfer);
-
-		entries[1].address = info->txAddr + stream->period_size * stream->buffer_cycle;
-		entries[1].size = stream->period_size;
-
-		entries[2].address = entries[0].address + sizeof(struct virtio_snd_pcm_xfer);
-		entries[2].size = sizeof(struct virtio_snd_pcm_status);
-
-		status_t status = info->virtio->queue_request_v(info->txQueue, entries,
-			2, 1, NULL);
-
-		if (status != B_OK) {
-			DEBUG("%s", "queue request failed\n");
-			return status;
-		}
-
-		while (!info->virtio->queue_dequeue(info->txQueue, NULL, NULL));
-
-		struct virtio_snd_pcm_status* hdr = (struct virtio_snd_pcm_status*)(stream->xferBuf
-			+ (sizeof(struct virtio_snd_pcm_xfer) + sizeof(struct virtio_snd_pcm_status))
-			* stream->buffer_cycle + sizeof(struct virtio_snd_pcm_xfer));
-
-		if (hdr->status != VIRTIO_SND_S_OK) {
-			ERROR("device returned error signal on playback\n");
-			return B_ERROR;
-		}
-
-		cpu_status former = disable_interrupts();
-		acquire_spinlock(&stream->xferLock);
-
-		stream->real_time = system_time();
-		stream->frames_count += FRAMES_PER_BUFFER;
-		stream->buffer_cycle = (stream->buffer_cycle + 1) % BUFFERS;
-
-		release_spinlock(&stream->xferLock);
-		restore_interrupts(former);
-
-		snooze_until(stream->real_time + 1000000L / stream->cvsr * FRAMES_PER_BUFFER,
-			CLOCK_REALTIME);
-	}
-
-	return B_OK;
-}
-
-
-static status_t
-record_thread(VirtIOSoundDriverInfo* info)
-{
-	VirtIOSoundPCMInfo* stream = get_stream(info, VIRTIO_SND_D_INPUT);
-	if (stream == NULL)
-		return B_ERROR;
-
-	while (stream->current_state == VIRTIO_SND_STATE_START) {
-		acquire_sem(info->rxSem);
-
-		if (!info->virtio->queue_is_empty(info->rxQueue)) {
-			DEBUG("%s", "queue is not empty\n");
-			return B_ERROR;
-		}
-
-		physical_entry entries[3];
-
-		entries[0].address = stream->xferAddr + (sizeof(struct virtio_snd_pcm_xfer) +
-			sizeof(struct virtio_snd_pcm_status)) * stream->buffer_cycle;
-		entries[0].size = sizeof(struct virtio_snd_pcm_xfer);
-
-		entries[1].address = info->rxAddr + stream->period_size * stream->buffer_cycle;
-		entries[1].size = stream->period_size;
-
-		entries[2].address = entries[0].address + sizeof(struct virtio_snd_pcm_xfer);
-		entries[2].size = sizeof(struct virtio_snd_pcm_status);
-
-		status_t status = info->virtio->queue_request_v(info->rxQueue, entries,
-			1, 2, NULL);
-
-		if (status != B_OK) {
-			DEBUG("%s", "queue request failed\n");
-			return status;
-		}
-
-		while (!info->virtio->queue_dequeue(info->rxQueue, NULL, NULL));
-
-		struct virtio_snd_pcm_status* hdr = (struct virtio_snd_pcm_status*)(stream->xferBuf
-			+ (sizeof(struct virtio_snd_pcm_xfer) + sizeof(struct virtio_snd_pcm_status))
-			* stream->buffer_cycle + sizeof(struct virtio_snd_pcm_xfer));
-
-		if (hdr->status != VIRTIO_SND_S_OK) {
-			ERROR("device returned error signal on recording\n");
-			return B_ERROR;
-		}
-
-		cpu_status former = disable_interrupts();
-		acquire_spinlock(&stream->xferLock);
-
-		stream->real_time = system_time();
-		stream->frames_count += FRAMES_PER_BUFFER;
-		stream->buffer_cycle = (stream->buffer_cycle + 1) % BUFFERS;
-
-		release_spinlock(&stream->xferLock);
-		restore_interrupts(former);
-
-		snooze_until(stream->real_time + 1000000L / stream->cvsr * FRAMES_PER_BUFFER,
-			CLOCK_REALTIME);
-	}
-
-	return B_OK;
-}
-
-
-static status_t
-start_playback_stream(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
+start_stream(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 {
 	stream->buffer_cycle = 0;
 	stream->real_time = 0;
@@ -590,7 +465,7 @@ start_playback_stream(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 
 	status_t status;
 	if ((void*)stream->xferBuf == NULL) {
-		stream->xferArea = create_area("virtio_snd tx_xfer", (void**)&stream->xferBuf,
+		stream->xferArea = create_area("virtio_snd xfer", (void**)&stream->xferBuf,
 			B_ANY_KERNEL_BLOCK_ADDRESS, B_PAGE_SIZE, B_FULL_LOCK,
 			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
 
@@ -603,7 +478,7 @@ start_playback_stream(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 		physical_entry entry;
 		status = get_memory_map((void*)stream->xferBuf, B_PAGE_SIZE, &entry, 1);
 		if (status != B_OK) {
-			ERROR("unable to get tx_xfer memory map (%s)\n", strerror(status));
+			ERROR("unable to get xfer memory map (%s)\n", strerror(status));
 			goto err1;
 		}
 
@@ -623,19 +498,8 @@ start_playback_stream(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 		goto err1;
 	}
 
-	info->txThread = spawn_kernel_thread((thread_func)playback_thread, "virtio_snd tx_thread",
-		B_REAL_TIME_PRIORITY, (void*)info);
+	return B_OK;
 
-	status = info->txThread;
-	if (status < B_OK) {
-		ERROR("unable to start tx_thread (%s)\n", strerror(status));
-		goto err2;
-	}
-
-	return resume_thread(info->txThread);
-
-err2:
-	VirtIOSoundPCMStop(info, stream);
 err1:
 	delete_area(stream->xferArea);
 	return status;
@@ -643,63 +507,76 @@ err1:
 
 
 static status_t
-start_record_stream(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
+stream_buffer_exchange(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 {
-	stream->buffer_cycle = 0;
-	stream->real_time = 0;
-	stream->frames_count = 0;
+	snooze_until(stream->real_time + 1000000L / stream->cvsr * FRAMES_PER_BUFFER,
+		CLOCK_REALTIME);
 
-	status_t status;
-	if ((void*)stream->xferBuf == NULL) {
-		stream->xferArea = create_area("virtio_snd rx_xfer", (void**)&stream->xferBuf,
-			B_ANY_KERNEL_BLOCK_ADDRESS, B_PAGE_SIZE, B_FULL_LOCK,
-			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+	size_t writtenVectorCount = 0;
+	size_t readVectorCount = 0;
+	::virtio_queue queue = 0;
+	addr_t baseAddr = 0;
 
-		status = stream->xferArea;
-		if (status < 0) {
-			ERROR("unable to create rx_xfer area (%s)\n", strerror(status));
-			return status;
+	switch (stream->direction) {
+		case VIRTIO_SND_D_OUTPUT: {
+			baseAddr = info->txAddr;
+			queue = info->txQueue;
+
+			writtenVectorCount = 1;
+			readVectorCount = 2;
+			break;
 		}
+		case VIRTIO_SND_D_INPUT: {
+			baseAddr = info->rxAddr;
+			queue = info->rxQueue;
 
-		physical_entry entry;
-		status = get_memory_map((void*)stream->xferBuf, B_PAGE_SIZE, &entry, 1);
-		if (status != B_OK) {
-			ERROR("unable to get rx_xfer memory map (%s)\n", strerror(status));
-			goto err1;
-		}
-
-		stream->xferAddr = entry.address;
-
-		for (uint32 i = 0; i < BUFFERS; i++) {
-			struct virtio_snd_pcm_xfer* xfer = (struct virtio_snd_pcm_xfer*)(stream->xferBuf
-				+ (sizeof(struct virtio_snd_pcm_xfer) + sizeof(struct virtio_snd_pcm_status)) * i);
-
-			xfer->stream_id = stream->stream_id;
+			writtenVectorCount = 2;
+			readVectorCount = 1;
+			break;
 		}
 	}
 
-	status = VirtIOSoundPCMStart(info, stream);
+	if (!info->virtio->queue_is_empty(queue)) {
+		DEBUG("%s", "queue is not empty\n");
+		return B_ERROR;
+	}
+
+	physical_entry entries[3];
+
+	entries[0].address = stream->xferAddr + (sizeof(struct virtio_snd_pcm_xfer) +
+		sizeof(struct virtio_snd_pcm_status)) * stream->buffer_cycle;
+	entries[0].size = sizeof(struct virtio_snd_pcm_xfer);
+
+	entries[1].address = baseAddr + stream->period_size * stream->buffer_cycle;
+	entries[1].size = stream->period_size;
+
+	entries[2].address = entries[0].address + sizeof(struct virtio_snd_pcm_xfer);
+	entries[2].size = sizeof(struct virtio_snd_pcm_status);
+
+	status_t status = info->virtio->queue_request_v(queue, entries,
+		readVectorCount, writtenVectorCount, NULL);
+
 	if (status != B_OK) {
-		ERROR("unable to start stream_%u (%s)\n", stream->stream_id, strerror(status));
-		goto err1;
+		DEBUG("%s", "enqueue request failed\n");
+		return status;
 	}
 
-	info->rxThread = spawn_kernel_thread((thread_func)record_thread, "virtio_snd rx_thread",
-		B_REAL_TIME_PRIORITY, (void*)info);
+	while (!info->virtio->queue_dequeue(queue, NULL, NULL));
 
-	status = info->rxThread;
-	if (status < B_OK) {
-		ERROR("unable to start rx_thread (%s)\n", strerror(status));
-		goto err2;
+	struct virtio_snd_pcm_status* hdr = (struct virtio_snd_pcm_status*)(stream->xferBuf
+		+ (sizeof(struct virtio_snd_pcm_xfer) + sizeof(struct virtio_snd_pcm_status))
+		* stream->buffer_cycle + sizeof(struct virtio_snd_pcm_xfer));
+
+	if (hdr->status != VIRTIO_SND_S_OK) {
+		ERROR("device (stream_%u) returned error signal on buffer exchange\n", stream->stream_id);
+		return B_ERROR;
 	}
 
-	return resume_thread(info->rxThread);
+	stream->real_time = system_time();
+	stream->frames_count += FRAMES_PER_BUFFER;
+	stream->buffer_cycle = (stream->buffer_cycle + 1) % BUFFERS;
 
-err2:
-	VirtIOSoundPCMStop(info, stream);
-err1:
-	delete_area(stream->xferArea);
-	return status;
+	return B_OK;
 }
 
 
@@ -711,12 +588,12 @@ buffer_exchange(VirtIOSoundDriverInfo* info, multi_buffer_info* data)
 
 	if (pStream != NULL) {
 		if (pStream->current_state != VIRTIO_SND_STATE_START)
-			start_playback_stream(info, pStream);
+			start_stream(info, pStream);
 	}
 
 	if (rStream != NULL) {
 		if (rStream->current_state != VIRTIO_SND_STATE_START)
-			start_record_stream(info, rStream);
+			start_stream(info, rStream);
 	}
 
 	if (!IS_USER_ADDRESS(data))
@@ -728,41 +605,35 @@ buffer_exchange(VirtIOSoundDriverInfo* info, multi_buffer_info* data)
 	if (status < B_OK)
 		return B_BAD_ADDRESS;
 
-	acquire_sem(info->txSem);
-	acquire_sem(info->rxSem);
-
 	buf_info.flags = 0x00;
 
-	cpu_status former = disable_interrupts();
-
 	if (pStream != NULL) {
-		acquire_spinlock(&pStream->xferLock);
+		acquire_sem(info->txSem);
+
+		status = stream_buffer_exchange(info, pStream);
+		if (status != B_OK)
+			return status;
 
 		buf_info.flags |= B_MULTI_BUFFER_PLAYBACK;
 
 		buf_info.playback_buffer_cycle = pStream->buffer_cycle;
 		buf_info.played_real_time = pStream->real_time;
 		buf_info.played_frames_count = pStream->frames_count;
-
-		release_spinlock(&pStream->xferLock);
 	}
 
 	if (rStream != NULL) {
-		acquire_spinlock(&rStream->xferLock);
+		acquire_sem(info->rxSem);
+
+		status = stream_buffer_exchange(info, rStream);
+		if (status != B_OK)
+			return status;
 
 		buf_info.flags |= B_MULTI_BUFFER_RECORD;
 
 		buf_info.record_buffer_cycle = rStream->buffer_cycle;
 		buf_info.recorded_real_time = rStream->real_time;
 		buf_info.recorded_frames_count = rStream->frames_count;
-
-		release_spinlock(&rStream->xferLock);
 	}
-
-	restore_interrupts(former);
-
-	release_sem_etc(info->txSem, 1, B_DO_NOT_RESCHEDULE);
-	release_sem_etc(info->rxSem, 1, B_DO_NOT_RESCHEDULE);
 
 	status = user_memcpy(data, &buf_info, sizeof(multi_buffer_info));
 	if (status < B_OK)
