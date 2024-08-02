@@ -60,6 +60,12 @@ create_multi_channel_info(VirtIOSoundDriverInfo* info, multi_channel_info* chann
 
 			index++;
 		}
+	}
+
+	for (uint32 i = 0; i < 2; i++) {
+		VirtIOSoundPCMInfo* stream = get_stream(info, i);
+		if (stream == NULL)
+			continue;
 
 		channels[index].channel_id = index;
 		channels[index].kind = (stream->direction == VIRTIO_SND_D_OUTPUT)
