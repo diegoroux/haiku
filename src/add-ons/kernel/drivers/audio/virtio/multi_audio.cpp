@@ -688,6 +688,7 @@ buffer_force_stop(VirtIOSoundDriverInfo* info)
 	info->rxBuf = (addr_t)NULL;
 
 	delete_sem(info->txSem);
+	delete_sem(info->rxSem);
 
 	return B_OK;
 }

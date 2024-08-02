@@ -283,6 +283,18 @@ virtio_snd_uninit_device(void *_info)
 	delete_area(info->ctrlArea);
 	delete_area(info->eventArea);
 
+	delete_area(info->txArea);
+	delete_area(info->rxArea);
+
+	for (uint32 i = 0; i < info->nStreams; i++) {
+		VirtIOSoundPCMInfo* stream = &info->streams[i];
+
+		if ((void*)stream->xferBuf != NULL)
+			delete_area(stream->xferArea);
+	}
+
+	free(info->streams);
+
 	return;
 }
 
@@ -325,6 +337,21 @@ virtio_snd_close(void* cookie)
 	VirtIOSoundDriverInfo* info = (VirtIOSoundDriverInfo*)cookie;
 
 	info->opened = false;
+
+	for (uint32 i = 0; i < info->nStreams; i++) {
+		VirtIOSoundPCMInfo* stream = &info->streams[i];
+
+		if (stream->current_state == VIRTIO_SND_STATE_START) {
+			status_t status = VirtIOSoundPCMStop(info, stream);
+
+			if (status != B_OK)
+				return status;
+
+			status = VirtIOSoundPCMRelease(info, stream);
+			if (status != B_OK)
+				return status;
+		}
+	}
 
 	return B_OK;
 }
