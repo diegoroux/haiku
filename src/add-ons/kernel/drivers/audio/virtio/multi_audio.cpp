@@ -48,7 +48,7 @@ create_multi_channel_info(VirtIOSoundDriverInfo* info, multi_channel_info* chann
 			channels[index].kind = (stream->direction == VIRTIO_SND_D_OUTPUT)
 				? B_MULTI_OUTPUT_CHANNEL : B_MULTI_INPUT_CHANNEL;
 
-			channels[index].designations = stream->chmap[index];
+			channels[index].designations = stream->chmap[j];
 
 			if (stream->channels == 2) {
 				channels[index].designations |= B_CHANNEL_STEREO_BUS;
