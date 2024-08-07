@@ -266,6 +266,32 @@ to_cvsr(uint32 rate)
 }
 
 
+static const char*
+to_format_string(uint32 format)
+{
+	switch (format) {
+		case B_FMT_8BIT_S:
+			return "8-bit signed";
+		case B_FMT_8BIT_U:
+			return "8-bit unsigned";
+		case B_FMT_16BIT:
+			return "16-bit";
+		case B_FMT_20BIT:
+			return "20-bit";
+		case B_FMT_24BIT:
+			return "24-bit";
+		case B_FMT_32BIT:
+			return "32-bit";
+		case B_FMT_FLOAT:
+			return "float";
+		case B_FMT_DOUBLE:
+			return "double";
+		default:
+			return "unknown";
+	}
+}
+
+
 static status_t
 set_global_format(VirtIOSoundDriverInfo* info, multi_format_info* data)
 {
@@ -314,6 +340,10 @@ set_global_format(VirtIOSoundDriverInfo* info, multi_format_info* data)
 			ERROR("set params failed (%s)\n", strerror(status));
 			return status;
 		}
+
+		LOG("%s stream [id: %u] set to %s format and %u rate\n",
+			(stream->direction == VIRTIO_SND_D_OUTPUT) ? "output" : "input",
+			stream->stream_id, to_format_string(stream->format), stream->cvsr);
 	}
 
 	return B_OK;
@@ -454,8 +484,10 @@ get_buffers(VirtIOSoundDriverInfo* info, multi_buffer_list* data)
 		}
 
 		status = VirtIOSoundPCMPrepare(info, stream);
-		if (status != B_OK)
+		if (status != B_OK) {
+			ERROR("failed to prepare stream_%u (%s)\n", stream->stream_id, strerror(status));
 			return status;
+		}
 	}	
 
 	return B_OK;
