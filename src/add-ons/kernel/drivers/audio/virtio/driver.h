@@ -14,6 +14,8 @@
 #define ERROR(x...)		dprintf("\33[33mvirtio_sound:\33[0m " x)
 #define LOG(x...)		dprintf("virtio_sound: " x)
 
+#define _VIRTIO_SND_DEBUG 1
+
 #ifdef _VIRTIO_SND_DEBUG
 #define DEBUG(x, y...)		dprintf("\33[36mvirtio_sound:\33[0m %s: " x, __func__, y)
 #else
@@ -50,8 +52,8 @@ struct VirtIOSoundPCMInfo {
 	uint8						channels_max;
 
 	uint32						buffer_cycle;
-	uint32						real_time;
-	uint32						frames_count;
+	bigtime_t					real_time;
+	bigtime_t					frames_count;
 
 	uint8						chmap[VIRTIO_SND_CHMAP_MAX_SIZE];
 
