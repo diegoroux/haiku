@@ -327,15 +327,27 @@ set_global_format(VirtIOSoundDriverInfo* info, multi_format_info* data)
 		stream->period_size = stream->channels * format_to_size(stream->format)
 			* FRAMES_PER_BUFFER;
 
-		if (stream->current_state == VIRTIO_SND_STATE_START)
-			VirtIOSoundPCMStop(info, stream);
+		status_t status;
 
-		if (stream->current_state == VIRTIO_SND_STATE_STOP)
-			VirtIOSoundPCMRelease(info, stream);
+		if (stream->current_state == VIRTIO_SND_STATE_START) {
+			status = VirtIOSoundPCMStop(info, stream);
 
-		status_t status = VirtIOSoundPCMSetParams(info, stream,
-			stream->period_size, stream->period_size);
+			if (status != B_OK) {
+				ERROR("unable to stop stream [id: %u]\n", stream->stream_id);
+				return status;
+			}
+		}
 
+		if (stream->current_state == VIRTIO_SND_STATE_STOP) {
+			status = VirtIOSoundPCMRelease(info, stream);
+
+			if (status != B_OK) {
+				ERROR("unable to release stream [id: %u]\n", stream->stream_id);
+				return status;
+			}
+		}
+
+		status = VirtIOSoundPCMSetParams(info, stream, stream->period_size, stream->period_size);
 		if (status != B_OK) {
 			ERROR("set params failed (%s)\n", strerror(status));
 			return status;
@@ -488,7 +500,7 @@ get_buffers(VirtIOSoundDriverInfo* info, multi_buffer_list* data)
 			ERROR("failed to prepare stream_%u (%s)\n", stream->stream_id, strerror(status));
 			return status;
 		}
-	}	
+	}
 
 	return B_OK;
 }
@@ -535,6 +547,9 @@ start_stream(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 		ERROR("unable to start stream_%u (%s)\n", stream->stream_id, strerror(status));
 		goto err1;
 	}
+
+	LOG("stream [id: %u] started %s\n", stream->stream_id,
+		(stream->direction == VIRTIO_SND_D_OUTPUT) ? "playback" : "recording");
 
 	return B_OK;
 

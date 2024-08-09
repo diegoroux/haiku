@@ -267,6 +267,14 @@ VirtIOSoundRXQueueInit(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 
 	info->rxAddr = entry.address;
 
+	info->rxSem = create_sem(1, "virtio_sound rx_sem");
+	if (info->rxSem < B_OK) {
+		status = info->rxSem;
+
+		ERROR("rx semaphore creation failed (%s)\n", strerror(status));
+		goto err1;
+	}
+
 	return B_OK;
 
 err1:
