@@ -18,6 +18,10 @@
 #define	B_SR_NA		0x00
 #define B_FMT_NA	0x00
 
+/* 	High bitrates are currently disabled.
+ *	Buffer sizes can't maintain reasonable latency,
+ *	resulting in unbearable audio quality.
+ *	Until we fix it, they shall remain commented out. */
 
 static const uint32 supportedRates[] = {
 	B_SR_NA,		// VIRTIO_SND_PCM_RATE_5512
@@ -31,9 +35,9 @@ static const uint32 supportedRates[] = {
 	B_SR_64000,		// VIRTIO_SND_PCM_RATE_64000
 	B_SR_88200,		// VIRTIO_SND_PCM_RATE_88200
 	B_SR_96000,		// VIRTIO_SND_PCM_RATE_96000
-	B_SR_176400,	// VIRTIO_SND_PCM_RATE_176400
-	B_SR_192000,	// VIRTIO_SND_PCM_RATE_192000
-	B_SR_384000,	// VIRTIO_SND_PCM_RATE_384000
+	B_SR_NA,		// B_SR_176400,	// VIRTIO_SND_PCM_RATE_176400
+	B_SR_NA,		// B_SR_192000,	// VIRTIO_SND_PCM_RATE_192000
+	B_SR_NA,		// B_SR_384000,	// VIRTIO_SND_PCM_RATE_384000
 };
 
 
@@ -119,8 +123,15 @@ VirtIOSoundQueryStreamInfo(VirtIOSoundDriverInfo* info)
 	if (info->streams == NULL)
 		return B_NO_MEMORY;
 
+	uint32 index = 0;
+
 	for (uint32 i = 0; i < info->nStreams; i++) {
-		VirtIOSoundPCMInfo* stream = &info->streams[i];
+		VirtIOSoundPCMInfo* stream = &info->streams[index++];
+
+		// Dynamic buffer sizes and higher latency settings
+		// broke down recording for most bitrates.
+		if (stream_info[i].direction == VIRTIO_SND_D_INPUT)
+			continue;
 
 		stream->stream_id = i;
 		stream->nid = stream_info[i].hdr.hda_fn_nid;

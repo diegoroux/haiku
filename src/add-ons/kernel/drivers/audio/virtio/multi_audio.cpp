@@ -19,16 +19,14 @@
 static VirtIOSoundPCMInfo*
 get_stream(VirtIOSoundDriverInfo* info, uint8 direction)
 {
-	VirtIOSoundPCMInfo* stream = NULL;
-
 	for (uint32 i = 0; i < info->nStreams; i++) {
-		stream = &info->streams[i];
+		VirtIOSoundPCMInfo* stream = &info->streams[i];
 
 		if (stream->direction == direction)
-			break;
+			return stream;
 	}
 
-	return stream;
+	return NULL;
 }
 
 
@@ -181,8 +179,8 @@ get_global_format(VirtIOSoundDriverInfo* info, multi_format_info* data)
 
 	data->info_size = sizeof(multi_format_info);
 
-	data->output_latency = 30;
-	data->input_latency = 30;
+	data->output_latency = 80;
+	data->input_latency = 80;
 
 	for (uint32 i = 0; i < 2; i++) {
 		VirtIOSoundPCMInfo* stream = get_stream(info, i);
@@ -324,8 +322,10 @@ set_global_format(VirtIOSoundDriverInfo* info, multi_format_info* data)
 		stream->rate = request->rate;
 		stream->cvsr = to_cvsr(request->rate);
 
+		stream->buffer_size = 1024 * 20;
+
 		stream->period_size = stream->channels * format_to_size(stream->format)
-			* FRAMES_PER_BUFFER;
+			* stream->buffer_size;
 
 		status_t status;
 
@@ -353,7 +353,7 @@ set_global_format(VirtIOSoundDriverInfo* info, multi_format_info* data)
 			return status;
 		}
 
-		LOG("%s stream [id: %u] set to %s format and %u rate\n",
+		LOG("%s stream [id: %u] set to %s format and %u Hz rate\n",
 			(stream->direction == VIRTIO_SND_D_OUTPUT) ? "output" : "input",
 			stream->stream_id, to_format_string(stream->format), stream->cvsr);
 	}
@@ -398,7 +398,7 @@ list_mix_controls(VirtIOSoundDriverInfo* info, multi_mix_control_info* data)
 		idx++;
 	}
 
-	data->control_count = 0;
+	data->control_count = 2;
 
 	return B_OK;
 }
@@ -447,7 +447,7 @@ get_buffers(VirtIOSoundDriverInfo* info, multi_buffer_list* data)
 
 				data->return_playback_buffers = BUFFERS;
 				data->return_playback_channels = stream->channels;
-				data->return_playback_buffer_size = FRAMES_PER_BUFFER;
+				data->return_playback_buffer_size = stream->buffer_size;
 
 				buffers = data->playback_buffers;
 
@@ -461,7 +461,7 @@ get_buffers(VirtIOSoundDriverInfo* info, multi_buffer_list* data)
 
 				data->return_record_buffers = BUFFERS;
 				data->return_record_channels = stream->channels;
-				data->return_record_buffer_size = FRAMES_PER_BUFFER;
+				data->return_record_buffer_size = stream->buffer_size;
 
 				buffers = data->record_buffers;
 
@@ -562,7 +562,7 @@ err1:
 static status_t
 stream_buffer_exchange(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 {
-	snooze_until(stream->real_time + 1000000L / stream->cvsr * FRAMES_PER_BUFFER,
+	snooze_until(stream->real_time + 1000000L / stream->cvsr * stream->buffer_size,
 		CLOCK_REALTIME);
 
 	size_t writtenVectorCount = 0;
@@ -626,7 +626,7 @@ stream_buffer_exchange(VirtIOSoundDriverInfo* info, VirtIOSoundPCMInfo* stream)
 	}
 
 	stream->real_time = system_time();
-	stream->frames_count += FRAMES_PER_BUFFER;
+	stream->frames_count += stream->buffer_size;
 	stream->buffer_cycle = (stream->buffer_cycle + 1) % BUFFERS;
 
 	return B_OK;

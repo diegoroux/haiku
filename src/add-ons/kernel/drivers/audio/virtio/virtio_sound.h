@@ -170,8 +170,8 @@ enum {
     VIRTIO_SND_PCM_RATE_96000, 
     VIRTIO_SND_PCM_RATE_176400, 
     VIRTIO_SND_PCM_RATE_192000, 
-    VIRTIO_SND_PCM_RATE_384000 
-}; 
+    VIRTIO_SND_PCM_RATE_384000
+};
 
 
 struct virtio_snd_pcm_info { 

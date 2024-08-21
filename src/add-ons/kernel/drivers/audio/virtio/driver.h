@@ -22,7 +22,6 @@
 
 #define VIRTIO_SND_CHMAP_MAX_SIZE	18
 
-#define FRAMES_PER_BUFFER	(1024 * 16)
 #define BUFFERS				2
 
 
@@ -48,6 +47,8 @@ struct VirtIOSoundPCMInfo {
 	uint8						channels;
 	uint8						channels_min;
 	uint8						channels_max;
+
+	uint32						buffer_size;
 
 	uint32						buffer_cycle;
 	bigtime_t					real_time;
